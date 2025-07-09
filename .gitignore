@@ -4,3 +4,4 @@
 # 忽略 ESP-IDF managed components
 /managed_components/
 
+/M5Tab5-UserDemo-Main/
