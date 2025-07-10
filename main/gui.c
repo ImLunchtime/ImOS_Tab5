@@ -3,6 +3,7 @@
 #include "overlay_drawer.h"
 #include "app_launcher.h"
 #include "app_settings.h"
+#include "app_music_player.h"
 #include "gesture_handler.h"
 #include "system_test.h"
 
@@ -17,6 +18,7 @@ void gui_init(lv_disp_t *disp)
     // 注册应用
     register_launcher_app();
     register_settings_app();
+    register_music_player_app();
     
     // 启动所有auto_start的Overlay
     overlay_t* overlay = app_manager_get_overlay_list();

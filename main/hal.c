@@ -46,6 +46,9 @@ void hal_init(void)
     // Initialize touchpad
     hal_touchpad_init();
 
+    // Initialize SD card
+    hal_sdcard_init();
+
     g_hal_initialized = true;
     printf("HAL initialized successfully\n");
 }
@@ -61,6 +64,9 @@ void hal_deinit(void)
 
     // Turn off display backlight
     hal_display_backlight_off();
+
+    // Deinitialize SD card
+    hal_sdcard_deinit();
 
     // Deinitialize I2C (if needed)
     // bsp_i2c_deinit(); // Usually not needed as it's used by other components

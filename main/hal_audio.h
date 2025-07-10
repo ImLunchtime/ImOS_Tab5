@@ -64,6 +64,40 @@ void hal_audio_stop(void);
  */
 size_t hal_audio_record(int16_t* buffer, size_t buffer_size, uint32_t duration_ms, float gain);
 
+/**
+ * @brief Play MP3 file from file system
+ * 
+ * @param file_path Path to MP3 file
+ * @return true if playback started successfully
+ */
+bool hal_audio_play_mp3_file(const char* file_path);
+
+/**
+ * @brief Stop current MP3 playback
+ */
+void hal_audio_stop_mp3(void);
+
+/**
+ * @brief Check if MP3 is currently playing
+ * 
+ * @return true if MP3 is playing
+ */
+bool hal_audio_is_mp3_playing(void);
+
+/**
+ * @brief Get MP3 playback position in seconds
+ * 
+ * @return Current playback position
+ */
+uint32_t hal_audio_get_mp3_position(void);
+
+/**
+ * @brief Get MP3 total duration in seconds (if available)
+ * 
+ * @return Total duration, 0 if unknown
+ */
+uint32_t hal_audio_get_mp3_duration(void);
+
 #ifdef __cplusplus
 }
 #endif

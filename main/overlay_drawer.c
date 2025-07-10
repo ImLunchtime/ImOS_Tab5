@@ -219,7 +219,7 @@ static void drawer_overlay_create(app_t* app) {
     lv_obj_t* title = lv_label_create(state->drawer_container);
     lv_label_set_text(title, "Apps");
     lv_obj_set_style_text_color(title, lv_color_hex(0x333333), 0);  // 深色文字适配浅色主题
-    lv_obj_set_style_text_font(title, lv_font_default(), 0);
+    lv_obj_set_style_text_font(title, lv_font_get_default(), 0);
     lv_obj_set_style_pad_all(title, 15, 0);
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
     
