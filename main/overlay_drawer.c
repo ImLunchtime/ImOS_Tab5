@@ -1,6 +1,7 @@
 #include "overlay_drawer.h"
 #include "app_manager.h"
 #include "gesture_handler.h"
+#include "hal.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -10,6 +11,10 @@ typedef struct {
     lv_obj_t* drawer_container;
     lv_obj_t* app_list;
     lv_obj_t* background;
+    lv_obj_t* volume_slider;
+    lv_obj_t* brightness_slider;
+    lv_obj_t* volume_label;
+    lv_obj_t* brightness_label;
     bool is_open;
     bool is_initialized;  // 添加初始化标志
     lv_anim_t slide_anim;
@@ -47,6 +52,42 @@ static void slide_anim_ready_cb(lv_anim_t* a) {
         // 同时隐藏抽屉容器，确保不会拦截事件
         lv_obj_add_flag(state->drawer_container, LV_OBJ_FLAG_HIDDEN);
         printf("Drawer completely closed and hidden\n");
+    }
+}
+
+// 音量滑块事件回调
+static void volume_slider_event_cb(lv_event_t* e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t* slider = lv_event_get_target(e);
+    
+    if (code == LV_EVENT_VALUE_CHANGED) {
+        drawer_state_t* state = (drawer_state_t*)lv_event_get_user_data(e);
+        if (state && state->volume_label) {
+            int32_t value = lv_slider_get_value(slider);
+            hal_set_speaker_volume((uint8_t)value);
+            
+            // 更新标签显示
+            lv_label_set_text_fmt(state->volume_label, "Vol: %d%%", (int)value);
+            printf("Volume changed to: %d%%\n", (int)value);
+        }
+    }
+}
+
+// 亮度滑块事件回调
+static void brightness_slider_event_cb(lv_event_t* e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t* slider = lv_event_get_target(e);
+    
+    if (code == LV_EVENT_VALUE_CHANGED) {
+        drawer_state_t* state = (drawer_state_t*)lv_event_get_user_data(e);
+        if (state && state->brightness_label) {
+            int32_t value = lv_slider_get_value(slider);
+            hal_set_display_brightness((uint8_t)value);
+            
+            // 更新标签显示
+            lv_label_set_text_fmt(state->brightness_label, "Brightness: %d%%", (int)value);
+            printf("Brightness changed to: %d%%\n", (int)value);
+        }
     }
 }
 
@@ -182,9 +223,9 @@ static void drawer_overlay_create(app_t* app) {
     lv_obj_set_style_pad_all(title, 15, 0);
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
     
-    // 创建应用列表
+    // 创建应用列表 (为底部滑块留出空间)
     state->app_list = lv_obj_create(state->drawer_container);
-    lv_obj_set_size(state->app_list, LV_PCT(100), screen_height - 60);
+    lv_obj_set_size(state->app_list, LV_PCT(100), screen_height - 160);  // 增加底部空间
     lv_obj_align_to(state->app_list, title, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 0);
     lv_obj_set_style_bg_opa(state->app_list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(state->app_list, 0, 0);
@@ -199,6 +240,64 @@ static void drawer_overlay_create(app_t* app) {
     lv_obj_set_flex_flow(state->app_list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(state->app_list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_gap(state->app_list, 8, 0);
+    
+    // 创建音量控制区域
+    lv_obj_t* volume_container = lv_obj_create(state->drawer_container);
+    lv_obj_set_size(volume_container, LV_PCT(90), 40);
+    lv_obj_align_to(volume_container, state->app_list, LV_ALIGN_OUT_BOTTOM_LEFT, 10, 10);
+    lv_obj_set_style_bg_opa(volume_container, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(volume_container, 0, 0);
+    lv_obj_set_style_pad_all(volume_container, 0, 0);
+    
+    // 音量标签
+    state->volume_label = lv_label_create(volume_container);
+    lv_label_set_text_fmt(state->volume_label, "Vol: %d%%", hal_get_speaker_volume());
+    lv_obj_set_style_text_color(state->volume_label, lv_color_hex(0xFF6600), 0);  // 橙色
+    lv_obj_align(state->volume_label, LV_ALIGN_TOP_LEFT, 0, 0);
+    
+    // 音量滑块
+    state->volume_slider = lv_slider_create(volume_container);
+    lv_obj_set_size(state->volume_slider, LV_PCT(100), 20);
+    lv_obj_align_to(state->volume_slider, state->volume_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 5);
+    lv_slider_set_range(state->volume_slider, 0, 100);
+    lv_slider_set_value(state->volume_slider, hal_get_speaker_volume(), LV_ANIM_OFF);
+    
+    // 设置音量滑块样式 (橙色主题)
+    lv_obj_set_style_bg_color(state->volume_slider, lv_color_hex(0xFF9966), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(state->volume_slider, lv_color_hex(0xFF6600), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(state->volume_slider, lv_color_hex(0xFF4400), LV_PART_KNOB);
+    
+    // 添加音量滑块事件
+    lv_obj_add_event_cb(state->volume_slider, volume_slider_event_cb, LV_EVENT_VALUE_CHANGED, state);
+    
+    // 创建亮度控制区域
+    lv_obj_t* brightness_container = lv_obj_create(state->drawer_container);
+    lv_obj_set_size(brightness_container, LV_PCT(90), 40);
+    lv_obj_align_to(brightness_container, volume_container, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
+    lv_obj_set_style_bg_opa(brightness_container, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(brightness_container, 0, 0);
+    lv_obj_set_style_pad_all(brightness_container, 0, 0);
+    
+    // 亮度标签
+    state->brightness_label = lv_label_create(brightness_container);
+    lv_label_set_text_fmt(state->brightness_label, "Brightness: %d%%", hal_get_display_brightness());
+    lv_obj_set_style_text_color(state->brightness_label, lv_color_hex(0x0066FF), 0);  // 蓝色
+    lv_obj_align(state->brightness_label, LV_ALIGN_TOP_LEFT, 0, 0);
+    
+    // 亮度滑块
+    state->brightness_slider = lv_slider_create(brightness_container);
+    lv_obj_set_size(state->brightness_slider, LV_PCT(100), 20);
+    lv_obj_align_to(state->brightness_slider, state->brightness_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 5);
+    lv_slider_set_range(state->brightness_slider, 20, 100);  // 最低亮度20%
+    lv_slider_set_value(state->brightness_slider, hal_get_display_brightness(), LV_ANIM_OFF);
+    
+    // 设置亮度滑块样式 (蓝色主题)
+    lv_obj_set_style_bg_color(state->brightness_slider, lv_color_hex(0x6699FF), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(state->brightness_slider, lv_color_hex(0x0066FF), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(state->brightness_slider, lv_color_hex(0x0044CC), LV_PART_KNOB);
+    
+    // 添加亮度滑块事件
+    lv_obj_add_event_cb(state->brightness_slider, brightness_slider_event_cb, LV_EVENT_VALUE_CHANGED, state);
     
     // 不在创建时刷新应用列表，延迟到第一次打开
     // refresh_app_list(state->app_list, false); // 移除这行
