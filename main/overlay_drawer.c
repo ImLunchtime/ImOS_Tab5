@@ -223,9 +223,9 @@ static void drawer_overlay_create(app_t* app) {
     lv_obj_set_style_pad_all(title, 15, 0);
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
     
-    // 创建应用列表 (为底部滑块留出空间)
+    // 创建应用列表 (为底部滑块留出更多空间)
     state->app_list = lv_obj_create(state->drawer_container);
-    lv_obj_set_size(state->app_list, LV_PCT(100), screen_height - 160);  // 增加底部空间
+    lv_obj_set_size(state->app_list, LV_PCT(100), screen_height - 250);  // 增加底部空间到250像素
     lv_obj_align_to(state->app_list, title, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 0);
     lv_obj_set_style_bg_opa(state->app_list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(state->app_list, 0, 0);
@@ -243,11 +243,11 @@ static void drawer_overlay_create(app_t* app) {
     
     // 创建音量控制区域
     lv_obj_t* volume_container = lv_obj_create(state->drawer_container);
-    lv_obj_set_size(volume_container, LV_PCT(90), 40);
-    lv_obj_align_to(volume_container, state->app_list, LV_ALIGN_OUT_BOTTOM_LEFT, 10, 10);
+    lv_obj_set_size(volume_container, LV_PCT(90), 60);  // 增加容器高度到60像素
+    lv_obj_align_to(volume_container, state->app_list, LV_ALIGN_OUT_BOTTOM_LEFT, 10, 15);  // 增加间距到15像素
     lv_obj_set_style_bg_opa(volume_container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(volume_container, 0, 0);
-    lv_obj_set_style_pad_all(volume_container, 0, 0);
+    lv_obj_set_style_pad_all(volume_container, 8, 0);  // 增加内边距到8像素
     
     // 音量标签
     state->volume_label = lv_label_create(volume_container);
@@ -257,8 +257,8 @@ static void drawer_overlay_create(app_t* app) {
     
     // 音量滑块
     state->volume_slider = lv_slider_create(volume_container);
-    lv_obj_set_size(state->volume_slider, LV_PCT(100), 20);
-    lv_obj_align_to(state->volume_slider, state->volume_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 5);
+    lv_obj_set_size(state->volume_slider, LV_PCT(100), 22);  // 调整滑块高度到22像素
+    lv_obj_align_to(state->volume_slider, state->volume_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 8);  // 增加间距到8像素
     lv_slider_set_range(state->volume_slider, 0, 100);
     lv_slider_set_value(state->volume_slider, hal_get_speaker_volume(), LV_ANIM_OFF);
     
@@ -272,11 +272,11 @@ static void drawer_overlay_create(app_t* app) {
     
     // 创建亮度控制区域
     lv_obj_t* brightness_container = lv_obj_create(state->drawer_container);
-    lv_obj_set_size(brightness_container, LV_PCT(90), 40);
-    lv_obj_align_to(brightness_container, volume_container, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
+    lv_obj_set_size(brightness_container, LV_PCT(90), 60);  // 增加容器高度到60像素
+    lv_obj_align_to(brightness_container, volume_container, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 15);  // 增加间距到15像素
     lv_obj_set_style_bg_opa(brightness_container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(brightness_container, 0, 0);
-    lv_obj_set_style_pad_all(brightness_container, 0, 0);
+    lv_obj_set_style_pad_all(brightness_container, 8, 0);  // 增加内边距到8像素
     
     // 亮度标签
     state->brightness_label = lv_label_create(brightness_container);
@@ -286,8 +286,8 @@ static void drawer_overlay_create(app_t* app) {
     
     // 亮度滑块
     state->brightness_slider = lv_slider_create(brightness_container);
-    lv_obj_set_size(state->brightness_slider, LV_PCT(100), 20);
-    lv_obj_align_to(state->brightness_slider, state->brightness_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 5);
+    lv_obj_set_size(state->brightness_slider, LV_PCT(100), 22);  // 调整滑块高度到22像素
+    lv_obj_align_to(state->brightness_slider, state->brightness_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 8);  // 增加间距到8像素
     lv_slider_set_range(state->brightness_slider, 20, 100);  // 最低亮度20%
     lv_slider_set_value(state->brightness_slider, hal_get_display_brightness(), LV_ANIM_OFF);
     
