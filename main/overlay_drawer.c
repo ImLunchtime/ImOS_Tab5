@@ -1,0 +1,360 @@
+#include "overlay_drawer.h"
+#include "app_manager.h"
+#include "gesture_handler.h"
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+// 抽屉状态
+typedef struct {
+    lv_obj_t* drawer_container;
+    lv_obj_t* app_list;
+    lv_obj_t* background;
+    bool is_open;
+    bool is_initialized;  // 添加初始化标志
+    lv_anim_t slide_anim;
+} drawer_state_t;
+
+// 应用项点击事件
+static void app_item_event_cb(lv_event_t* e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    app_t* app = (app_t*)lv_event_get_user_data(e);
+    
+    if (code == LV_EVENT_CLICKED && app) {
+        printf("*** APP ITEM CLICKED: %s ***\n", app->name);
+        
+        // 启动应用
+        bool success = app_manager_launch_app(app->name);
+        printf("App launch %s: %s\n", app->name, success ? "success" : "failed");
+        
+        // 关闭抽屉
+        app_drawer_close();
+    }
+}
+
+// 背景点击事件（关闭抽屉）
+static void background_event_cb(lv_event_t* e) {
+    printf("Background clicked - closing drawer\n");
+    app_drawer_close();
+}
+
+// 动画结束回调
+static void slide_anim_ready_cb(lv_anim_t* a) {
+    drawer_state_t* state = (drawer_state_t*)a->user_data;
+    if (!state->is_open) {
+        // 抽屉关闭后隐藏背景
+        lv_obj_add_flag(state->background, LV_OBJ_FLAG_HIDDEN);
+        // 同时隐藏抽屉容器，确保不会拦截事件
+        lv_obj_add_flag(state->drawer_container, LV_OBJ_FLAG_HIDDEN);
+        printf("Drawer completely closed and hidden\n");
+    }
+}
+
+// 简化的应用项创建，减少内存占用
+static void create_app_item(lv_obj_t* parent, app_t* app) {
+    if (!parent || !app) {
+        return;
+    }
+    
+    // 使用简单的标签而不是按钮，减少内存占用
+    lv_obj_t* item = lv_label_create(parent);
+    lv_label_set_text(item, app->name);
+    
+    // 简化样式，只设置必要的属性
+    lv_obj_set_size(item, LV_PCT(90), LV_SIZE_CONTENT);
+    lv_obj_set_style_text_color(item, lv_color_hex(0x333333), 0);
+    lv_obj_set_style_bg_color(item, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_bg_opa(item, LV_OPA_COVER, 0);
+    lv_obj_set_style_pad_all(item, 8, 0);
+    lv_obj_set_style_radius(item, 4, 0);
+    lv_obj_set_style_border_width(item, 1, 0);
+    lv_obj_set_style_border_color(item, lv_color_hex(0xE0E0E0), 0);
+    
+    // 简化的按压效果，不使用变换
+    lv_obj_set_style_bg_color(item, lv_color_hex(0xF0F0F0), LV_STATE_PRESSED);
+    
+    // 让标签可以接收点击事件
+    lv_obj_add_flag(item, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(item, LV_OBJ_FLAG_EVENT_BUBBLE);
+    
+    // 直接使用应用指针作为用户数据，避免字符串复制
+    lv_obj_add_event_cb(item, app_item_event_cb, LV_EVENT_CLICKED, app);
+    
+    printf("Created lightweight app item: %s\n", app->name);
+}
+
+// 清理应用项内存（现在已经不需要清理字符串了）
+static void cleanup_app_item(lv_obj_t* item) {
+    // 现在使用应用指针作为用户数据，不需要释放内存
+    (void)item; // 标记参数未使用
+}
+
+// 智能刷新应用列表 - 只在需要时创建/更新
+static void refresh_app_list(lv_obj_t* list, bool force_refresh) {
+    if (!list) {
+        printf("Error: app list container is NULL\n");
+        return;
+    }
+    
+    // 如果不是强制刷新且已有子项，跳过创建
+    if (!force_refresh && lv_obj_get_child_count(list) > 0) {
+        printf("App list already populated, skipping refresh\n");
+        return;
+    }
+    
+    printf("Refreshing app list...\n");
+    
+    // 清理现有应用项的内存（如果有的话）
+    uint32_t child_count = lv_obj_get_child_count(list);
+    for (uint32_t i = 0; i < child_count; i++) {
+        lv_obj_t* child = lv_obj_get_child(list, i);
+        cleanup_app_item(child);
+    }
+    
+    // 清空现有列表
+    lv_obj_clean(list);
+    
+    // 添加所有应用
+    app_t* app = app_manager_get_app_list();
+    int app_count = 0;
+    while (app) {
+        printf("Adding app to list: %s\n", app->name);
+        create_app_item(list, app);
+        app_count++;
+        app = app->next;
+    }
+    
+    printf("Total apps added to list: %d\n", app_count);
+}
+
+// 创建应用抽屉Overlay
+static void drawer_overlay_create(app_t* app) {
+    if (!app || !app->container) {
+        return;
+    }
+    
+    // 创建抽屉状态
+    drawer_state_t* state = (drawer_state_t*)malloc(sizeof(drawer_state_t));
+    if (!state) {
+        return;
+    }
+    memset(state, 0, sizeof(drawer_state_t));
+    
+    // 获取屏幕尺寸
+    lv_coord_t screen_width = lv_display_get_horizontal_resolution(NULL);
+    lv_coord_t screen_height = lv_display_get_vertical_resolution(NULL);
+    lv_coord_t drawer_width = screen_width / 4;  // 1/4屏幕宽度
+    
+    // 先创建简化的半透明背景
+    state->background = lv_obj_create(app->container);
+    lv_obj_set_size(state->background, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_pos(state->background, 0, 0);
+    lv_obj_set_style_bg_color(state->background, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(state->background, LV_OPA_30, 0);  // 降低透明度减少GPU负担
+    lv_obj_set_style_border_width(state->background, 0, 0);
+    lv_obj_set_style_pad_all(state->background, 0, 0);
+    lv_obj_add_flag(state->background, LV_OBJ_FLAG_HIDDEN);  // 初始隐藏
+    
+    // 确保背景能接收点击事件
+    lv_obj_clear_flag(state->background, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(state->background, background_event_cb, LV_EVENT_CLICKED, NULL);
+    
+    // 创建抽屉容器（在背景之后创建，确保在上层）
+    state->drawer_container = lv_obj_create(app->container);
+    lv_obj_set_size(state->drawer_container, drawer_width, screen_height);
+    lv_obj_set_pos(state->drawer_container, -drawer_width, 0);  // 初始位置在屏幕左侧外
+    lv_obj_set_style_bg_color(state->drawer_container, lv_color_hex(0xF5F5F5), 0);  // 浅色主题
+    lv_obj_set_style_bg_opa(state->drawer_container, LV_OPA_COVER, 0);  // 完全不透明
+    lv_obj_set_style_border_width(state->drawer_container, 1, 0);
+    lv_obj_set_style_border_color(state->drawer_container, lv_color_hex(0xE0E0E0), 0);
+    lv_obj_set_style_pad_all(state->drawer_container, 0, 0);
+    lv_obj_add_flag(state->drawer_container, LV_OBJ_FLAG_HIDDEN);  // 初始隐藏
+    
+    // 确保抽屉容器不会传播点击事件到背景
+    lv_obj_clear_flag(state->drawer_container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(state->drawer_container, LV_OBJ_FLAG_EVENT_BUBBLE);
+    
+    // 创建标题
+    lv_obj_t* title = lv_label_create(state->drawer_container);
+    lv_label_set_text(title, "Apps");
+    lv_obj_set_style_text_color(title, lv_color_hex(0x333333), 0);  // 深色文字适配浅色主题
+    lv_obj_set_style_text_font(title, lv_font_default(), 0);
+    lv_obj_set_style_pad_all(title, 15, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
+    
+    // 创建应用列表
+    state->app_list = lv_obj_create(state->drawer_container);
+    lv_obj_set_size(state->app_list, LV_PCT(100), screen_height - 60);
+    lv_obj_align_to(state->app_list, title, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 0);
+    lv_obj_set_style_bg_opa(state->app_list, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(state->app_list, 0, 0);
+    lv_obj_set_style_pad_all(state->app_list, 10, 0);
+    
+    // 确保列表容器不阻挡事件传播
+    lv_obj_clear_flag(state->app_list, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_clear_flag(state->app_list, LV_OBJ_FLAG_SCROLLABLE);  // 禁用滚动避免事件冲突
+    
+    // 设置列表布局
+    lv_obj_set_layout(state->app_list, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(state->app_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(state->app_list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_gap(state->app_list, 8, 0);
+    
+    // 不在创建时刷新应用列表，延迟到第一次打开
+    // refresh_app_list(state->app_list, false); // 移除这行
+    
+    // 保存状态到用户数据
+    app->user_data = state;
+}
+
+// 销毁应用抽屉Overlay
+static void drawer_overlay_destroy(app_t* app) {
+    if (app && app->user_data) {
+        drawer_state_t* state = (drawer_state_t*)app->user_data;
+        
+        // 清理应用列表中的内存
+        if (state->app_list) {
+            uint32_t child_count = lv_obj_get_child_count(state->app_list);
+            for (uint32_t i = 0; i < child_count; i++) {
+                lv_obj_t* child = lv_obj_get_child(state->app_list, i);
+                cleanup_app_item(child);
+            }
+        }
+        
+        free(state);
+        app->user_data = NULL;
+    }
+}
+
+// 打开抽屉
+void app_drawer_open(void) {
+    printf("Opening app drawer...\n");
+    overlay_t* overlay = app_manager_get_overlay("AppDrawer");
+    if (!overlay || !overlay->base.user_data) {
+        printf("Error: AppDrawer overlay not found or no user data\n");
+        return;
+    }
+    
+    drawer_state_t* state = (drawer_state_t*)overlay->base.user_data;
+    if (state->is_open) {
+        printf("App drawer is already open\n");
+        return;
+    }
+    
+    // 延迟加载：只在第一次打开时创建应用列表
+    if (!state->is_initialized) {
+        printf("First time opening drawer, creating app list...\n");
+        refresh_app_list(state->app_list, true);
+        state->is_initialized = true;
+    }
+    
+    // 显示背景
+    lv_obj_clear_flag(state->background, LV_OBJ_FLAG_HIDDEN);
+    
+    // 确保抽屉容器可见
+    lv_obj_clear_flag(state->drawer_container, LV_OBJ_FLAG_HIDDEN);
+    
+    // 强制刷新显示
+    lv_obj_invalidate(state->drawer_container);
+    lv_obj_invalidate(state->background);
+    
+    // 创建滑动动画
+    lv_anim_init(&state->slide_anim);
+    lv_anim_set_var(&state->slide_anim, state->drawer_container);
+    lv_anim_set_values(&state->slide_anim, -lv_obj_get_width(state->drawer_container), 0);
+    lv_anim_set_time(&state->slide_anim, 300);
+    lv_anim_set_exec_cb(&state->slide_anim, (lv_anim_exec_xcb_t)lv_obj_set_x);
+    lv_anim_set_path_cb(&state->slide_anim, lv_anim_path_ease_out);
+    lv_anim_set_ready_cb(&state->slide_anim, slide_anim_ready_cb);
+    lv_anim_set_user_data(&state->slide_anim, state);
+    lv_anim_start(&state->slide_anim);
+    
+    state->is_open = true;
+    
+    // 临时禁用手势处理，避免事件冲突
+    gesture_handler_set_enabled(false);
+    
+    printf("App drawer opened successfully\n");
+}
+
+// 关闭抽屉
+void app_drawer_close(void) {
+    overlay_t* overlay = app_manager_get_overlay("AppDrawer");
+    if (!overlay || !overlay->base.user_data) {
+        return;
+    }
+    
+    drawer_state_t* state = (drawer_state_t*)overlay->base.user_data;
+    if (!state->is_open) {
+        return;
+    }
+    
+    // 创建滑动动画
+    lv_anim_init(&state->slide_anim);
+    lv_anim_set_var(&state->slide_anim, state->drawer_container);
+    lv_anim_set_values(&state->slide_anim, 0, -lv_obj_get_width(state->drawer_container));
+    lv_anim_set_time(&state->slide_anim, 300);
+    lv_anim_set_exec_cb(&state->slide_anim, (lv_anim_exec_xcb_t)lv_obj_set_x);
+    lv_anim_set_path_cb(&state->slide_anim, lv_anim_path_ease_in);
+    lv_anim_set_ready_cb(&state->slide_anim, slide_anim_ready_cb);
+    lv_anim_set_user_data(&state->slide_anim, state);
+    lv_anim_start(&state->slide_anim);
+    
+    state->is_open = false;
+    
+    // 重新启用手势处理
+    gesture_handler_set_enabled(true);
+}
+
+// 切换抽屉状态
+void app_drawer_toggle(void) {
+    overlay_t* overlay = app_manager_get_overlay("AppDrawer");
+    if (!overlay || !overlay->base.user_data) {
+        return;
+    }
+    
+    drawer_state_t* state = (drawer_state_t*)overlay->base.user_data;
+    if (state->is_open) {
+        app_drawer_close();
+    } else {
+        app_drawer_open();
+    }
+}
+
+// 注册应用抽屉Overlay
+void register_drawer_overlay(void) {
+    app_manager_register_overlay("AppDrawer", LV_SYMBOL_LIST, 
+                                 drawer_overlay_create, drawer_overlay_destroy,
+                                 50, true);  // z_index=50, auto_start=true
+} 
+
+// 强制清理应用列表以释放内存
+void app_drawer_cleanup_list(void) {
+    overlay_t* overlay = app_manager_get_overlay("AppDrawer");
+    if (!overlay || !overlay->base.user_data) {
+        return;
+    }
+    
+    drawer_state_t* state = (drawer_state_t*)overlay->base.user_data;
+    if (state->is_open) {
+        // 抽屉打开时不清理
+        return;
+    }
+    
+    printf("Force cleaning app drawer list to free memory\n");
+    
+    // 清理应用列表
+    if (state->app_list) {
+        uint32_t child_count = lv_obj_get_child_count(state->app_list);
+        for (uint32_t i = 0; i < child_count; i++) {
+            lv_obj_t* child = lv_obj_get_child(state->app_list, i);
+            cleanup_app_item(child);
+        }
+        lv_obj_clean(state->app_list);
+    }
+    
+    // 重置初始化标志，下次打开时重新创建
+    state->is_initialized = false;
+    
+    printf("App drawer list cleaned\n");
+} 

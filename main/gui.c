@@ -1,44 +1,40 @@
 #include "gui.h"
-#include "lvdemomenu.h"
-
-// static void btn_event_cb(lv_event_t * e)
-// {
-//     lv_obj_t * btn = lv_event_get_target(e);
-//     if(lv_event_get_code(e) == LV_EVENT_CLICKED) {
-//         // Toggle button state
-//         bool current_state = lv_obj_has_state(btn, LV_STATE_CHECKED);
-//         if(current_state) {
-//             lv_obj_clear_state(btn, LV_STATE_CHECKED);
-//         } else {
-//             lv_obj_add_state(btn, LV_STATE_CHECKED);
-//         }
-//     }
-// }
+#include "app_manager.h"
+#include "overlay_drawer.h"
+#include "app_launcher.h"
+#include "app_settings.h"
+#include "gesture_handler.h"
+#include "system_test.h"
 
 void gui_init(lv_disp_t *disp) 
 {
-    // // Get the screen size
-    // lv_coord_t screen_width = lv_display_get_horizontal_resolution(disp);
-    // lv_coord_t screen_height = lv_display_get_vertical_resolution(disp);
-
-    // // Create a button in the center
-    // lv_obj_t *btn = lv_btn_create(lv_scr_act());
+    // 初始化应用管理器
+    app_manager_init();
     
-    // // Set button size (100x50 pixels)
-    // lv_obj_set_size(btn, 100, 50);
+    // 注册Overlay（按z_index顺序）
+    register_drawer_overlay();      // z_index=50
     
-    // // Center the button
-    // lv_obj_align(btn, LV_ALIGN_CENTER, 0, 0);
+    // 注册应用
+    register_launcher_app();
+    register_settings_app();
     
-    // // Add a label to the button
-    // lv_obj_t *label = lv_label_create(btn);
-    // lv_label_set_text(label, "Press Me!");
-    // lv_obj_center(label);
-
-    // // Make the button toggleable
-    // lv_obj_add_flag(btn, LV_OBJ_FLAG_CHECKABLE);
+    // 启动所有auto_start的Overlay
+    overlay_t* overlay = app_manager_get_overlay_list();
+    while (overlay) {
+        if (overlay->auto_start) {
+            app_manager_show_overlay(overlay->base.name);
+        }
+        overlay = overlay->next;
+    }
     
-    // // Add click event handler
-    // lv_obj_add_event_cb(btn, btn_event_cb, LV_EVENT_CLICKED, NULL);
-    lv_example_menu_5();
+    // 初始化手势处理（在overlay之后，确保手势区域在最顶层）
+    gesture_handler_init();
+    
+    // 启动启动器应用
+    app_manager_go_to_launcher();
+    
+    // 运行系统测试（可选，调试时使用）
+    #ifdef DEBUG_SYSTEM_TESTS
+    run_system_tests();
+    #endif
 } 
