@@ -100,37 +100,67 @@ static void brightness_slider_event_cb(lv_event_t* e) {
     }
 }
 
-// 简化的应用项创建，减少内存占用
+// 创建应用项 - 类似设置页面的列表样式
 static void create_app_item(lv_obj_t* parent, app_t* app) {
     if (!parent || !app) {
         return;
     }
     
-    // 使用简单的标签而不是按钮，减少内存占用
-    lv_obj_t* item = lv_label_create(parent);
-    lv_label_set_text(item, app->name);
+    // 创建应用项容器，类似设置页面的样式
+    lv_obj_t* item_container = lv_obj_create(parent);
+    lv_obj_set_size(item_container, LV_PCT(100), 60);  // 增加高度适配高分辨率
+    lv_obj_set_style_bg_color(item_container, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_bg_opa(item_container, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(item_container, 8, 0);  // 圆角
+    lv_obj_set_style_border_width(item_container, 1, 0);
+    lv_obj_set_style_border_color(item_container, lv_color_hex(0xE0E0E0), 0);
+    lv_obj_set_style_pad_all(item_container, 0, 0);
     
-    // 简化样式，只设置必要的属性
-    lv_obj_set_size(item, LV_PCT(90), LV_SIZE_CONTENT);
-    lv_obj_set_style_text_color(item, lv_color_hex(0x333333), 0);
-    lv_obj_set_style_bg_color(item, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_bg_opa(item, LV_OPA_COVER, 0);
-    lv_obj_set_style_pad_all(item, 8, 0);
-    lv_obj_set_style_radius(item, 4, 0);
-    lv_obj_set_style_border_width(item, 1, 0);
-    lv_obj_set_style_border_color(item, lv_color_hex(0xE0E0E0), 0);
+    // 按压效果
+    lv_obj_set_style_bg_color(item_container, lv_color_hex(0xF0F0F0), LV_STATE_PRESSED);
+    lv_obj_set_style_transform_scale(item_container, 980, LV_STATE_PRESSED);  // 轻微缩放效果
     
-    // 简化的按压效果，不使用变换
-    lv_obj_set_style_bg_color(item, lv_color_hex(0xF0F0F0), LV_STATE_PRESSED);
+    // 让容器可以接收点击事件
+    lv_obj_add_flag(item_container, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(item_container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(item_container, LV_OBJ_FLAG_EVENT_BUBBLE);
     
-    // 让标签可以接收点击事件
-    lv_obj_add_flag(item, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_clear_flag(item, LV_OBJ_FLAG_EVENT_BUBBLE);
+    // 创建应用图标（如果有）
+    if (app->icon[0] != '\0') {  // 检查字符串是否为空
+        lv_obj_t* icon = lv_label_create(item_container);
+        lv_label_set_text(icon, app->icon);
+        lv_obj_set_style_text_color(icon, lv_color_hex(0x2196F3), 0);  // 蓝色图标
+        lv_obj_set_style_text_font(icon, &lv_font_montserrat_20, 0);  // 大图标字体
+        lv_obj_align(icon, LV_ALIGN_LEFT_MID, 16, 0);
+        lv_obj_set_style_pad_all(icon, 0, 0);
+    }
     
-    // 直接使用应用指针作为用户数据，避免字符串复制
-    lv_obj_add_event_cb(item, app_item_event_cb, LV_EVENT_CLICKED, app);
+    // 创建应用名称标签
+    lv_obj_t* name_label = lv_label_create(item_container);
+    lv_label_set_text(name_label, app->name);
+    lv_obj_set_style_text_color(name_label, lv_color_hex(0x333333), 0);  // 深色文字
+    lv_obj_set_style_text_font(name_label, &lv_font_montserrat_18, 0);  // 大字体适配高分辨率
+    lv_obj_set_style_pad_all(name_label, 0, 0);
     
-    printf("Created lightweight app item: %s\n", app->name);
+    // 根据是否有图标调整文字位置
+    if (app->icon[0] != '\0') {  // 检查字符串是否为空
+        lv_obj_align(name_label, LV_ALIGN_LEFT_MID, 52, 0);  // 图标后面
+    } else {
+        lv_obj_align(name_label, LV_ALIGN_LEFT_MID, 16, 0);  // 左对齐
+    }
+    
+    // 创建右侧箭头指示器
+    lv_obj_t* arrow = lv_label_create(item_container);
+    lv_label_set_text(arrow, LV_SYMBOL_RIGHT);
+    lv_obj_set_style_text_color(arrow, lv_color_hex(0x999999), 0);  // 灰色箭头
+    lv_obj_set_style_text_font(arrow, &lv_font_montserrat_16, 0);
+    lv_obj_align(arrow, LV_ALIGN_RIGHT_MID, -16, 0);
+    lv_obj_set_style_pad_all(arrow, 0, 0);
+    
+    // 添加点击事件到容器
+    lv_obj_add_event_cb(item_container, app_item_event_cb, LV_EVENT_CLICKED, app);
+    
+    printf("Created modern app item: %s\n", app->name);
 }
 
 // 清理应用项内存（现在已经不需要清理字符串了）
@@ -237,17 +267,18 @@ static void drawer_overlay_create(app_t* app) {
     lv_obj_t* title = lv_label_create(state->drawer_container);
     lv_label_set_text(title, "Apps");
     lv_obj_set_style_text_color(title, lv_color_hex(0x333333), 0);  // 深色文字适配浅色主题
-    lv_obj_set_style_text_font(title, lv_font_get_default(), 0);
-    lv_obj_set_style_pad_all(title, 15, 0);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);  // 大字体适配高分辨率
+    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_LEFT, 0);  // 左对齐
+    lv_obj_set_style_pad_all(title, 20, 0);  // 增加内边距
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
     
     // 创建应用列表 (为底部滑块留出更多空间)
     state->app_list = lv_obj_create(state->drawer_container);
     lv_obj_set_size(state->app_list, LV_PCT(100), screen_height - 250);  // 增加底部空间到250像素
-    lv_obj_align_to(state->app_list, title, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 0);
+    lv_obj_align_to(state->app_list, title, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);  // 增加与标题的间距
     lv_obj_set_style_bg_opa(state->app_list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(state->app_list, 0, 0);
-    lv_obj_set_style_pad_all(state->app_list, 10, 0);
+    lv_obj_set_style_pad_all(state->app_list, 15, 0);  // 增加内边距适配高分辨率
     
     // 确保列表容器不阻挡事件传播
     lv_obj_clear_flag(state->app_list, LV_OBJ_FLAG_EVENT_BUBBLE);
@@ -257,7 +288,7 @@ static void drawer_overlay_create(app_t* app) {
     lv_obj_set_layout(state->app_list, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(state->app_list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(state->app_list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_gap(state->app_list, 8, 0);
+    lv_obj_set_style_pad_gap(state->app_list, 12, 0);  // 增加项目间距适配高分辨率
     
     // 创建音量控制区域
     lv_obj_t* volume_container = lv_obj_create(state->drawer_container);

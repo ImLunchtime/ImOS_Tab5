@@ -196,17 +196,20 @@ static void page_event_handler(lv_event_t* e) {
     // 创建页面（如果需要）
     create_page_on_demand(page_type);
     
-    // 设置页面加载事件
-    if (g_settings_state->pages[page_type].is_created) {
-        lv_menu_set_load_page_event(g_settings_state->menu, lv_event_get_target(e), 
-                                   g_settings_state->pages[page_type].page_obj);
+    // 确保页面创建成功后立即导航
+    if (g_settings_state->pages[page_type].is_created && g_settings_state->pages[page_type].page_obj) {
+        printf("Navigating to page type %d\n", page_type);
+        // 直接设置页面并导航
+        lv_menu_set_page(g_settings_state->menu, g_settings_state->pages[page_type].page_obj);
+        
+        // 更新当前页面
+        g_settings_state->current_page = page_type;
+        
+        // 清理未使用的页面
+        cleanup_unused_pages();
+    } else {
+        printf("Failed to create or navigate to page type %d\n", page_type);
     }
-    
-    // 更新当前页面
-    g_settings_state->current_page = page_type;
-    
-    // 清理未使用的页面
-    cleanup_unused_pages();
 }
 
 // 按需创建页面

@@ -329,128 +329,191 @@ static void music_player_app_create(app_t* app) {
         return;
     }
     
-    // 设置应用背景
-    lv_obj_set_style_bg_color(app->container, lv_color_hex(0xF5F5F5), 0);
+    // 设置红色背景
+    lv_obj_set_style_bg_color(app->container, lv_color_hex(0xBD4D4D), 0);
     lv_obj_set_style_bg_opa(app->container, LV_OPA_COVER, 0);
     
-    // 创建标题
-    lv_obj_t* title = lv_label_create(app->container);
-    lv_label_set_text(title, "Music Player");
-    lv_obj_set_style_text_color(title, lv_color_hex(0x333333), 0);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_28, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
+    // 获取屏幕尺寸
+    lv_coord_t screen_width = lv_display_get_horizontal_resolution(NULL);
+    lv_coord_t screen_height = lv_display_get_vertical_resolution(NULL);
+    lv_coord_t sidebar_width = screen_width / 3;  // 1/3屏幕宽度
+    lv_coord_t main_width = screen_width - sidebar_width;
     
-    // 创建当前歌曲信息区域
-    lv_obj_t* song_info_panel = lv_obj_create(app->container);
-    lv_obj_set_size(song_info_panel, SCREEN_WIDTH - 40, 120);
-    lv_obj_align(song_info_panel, LV_ALIGN_TOP_MID, 0, 70);
-    lv_obj_set_style_bg_color(song_info_panel, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_border_width(song_info_panel, 2, 0);
-    lv_obj_set_style_border_color(song_info_panel, lv_color_hex(0xDDDDDD), 0);
-    lv_obj_set_style_radius(song_info_panel, 10, 0);
-    lv_obj_set_style_pad_all(song_info_panel, 20, 0);
+    /* === 左侧播放列表侧栏 === */
+    lv_obj_t* sidebar_container = lv_obj_create(app->container);
+    lv_obj_set_size(sidebar_container, sidebar_width, screen_height);
+    lv_obj_set_pos(sidebar_container, 0, 0);
+    lv_obj_set_style_bg_opa(sidebar_container, LV_OPA_TRANSP, 0);  // 透明背景
+    lv_obj_set_style_border_width(sidebar_container, 0, 0);  // 无边框
+    lv_obj_set_style_pad_all(sidebar_container, 0, 0);
+    lv_obj_clear_flag(sidebar_container, LV_OBJ_FLAG_SCROLLABLE);
+    
+    // 侧栏标题
+    lv_obj_t* sidebar_title = lv_label_create(sidebar_container);
+    lv_label_set_text(sidebar_title, "Playlist");
+    lv_obj_set_style_text_color(sidebar_title, lv_color_hex(0xFFFFFF), 0);  // 白色文字
+    lv_obj_set_style_text_font(sidebar_title, &lv_font_montserrat_20, 0);
+    lv_obj_align(sidebar_title, LV_ALIGN_TOP_LEFT, 20, 20);
+    
+    // 创建播放列表 (保持原有逻辑)
+    lv_obj_t* list = lv_list_create(sidebar_container);
+    lv_obj_set_size(list, sidebar_width - 20, screen_height - 80);
+    lv_obj_align(list, LV_ALIGN_TOP_LEFT, 10, 60);
+    lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);  // 透明背景
+    lv_obj_set_style_border_width(list, 0, 0);  // 无边框
+    lv_obj_set_style_pad_all(list, 5, 0);
+    
+    // 设置列表项样式为白色文字
+    lv_obj_set_style_text_color(list, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_color(list, lv_color_hex(0xFFFFFF), LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, LV_PART_ITEMS);  // 列表项透明背景
+    
+    /* === 右侧主要区域 === */
+    lv_obj_t* main_container = lv_obj_create(app->container);
+    lv_obj_set_size(main_container, main_width, screen_height);
+    lv_obj_set_pos(main_container, sidebar_width, 0);
+    lv_obj_set_style_bg_opa(main_container, LV_OPA_TRANSP, 0);  // 透明背景
+    lv_obj_set_style_border_width(main_container, 0, 0);  // 无边框
+    lv_obj_set_style_pad_all(main_container, 0, 0);
+    lv_obj_clear_flag(main_container, LV_OBJ_FLAG_SCROLLABLE);
+    
+    /* === 右侧上半部分：音乐信息和封面 === */
+    lv_obj_t* info_container = lv_obj_create(main_container);
+    lv_obj_set_size(info_container, main_width - 40, screen_height / 2 - 20);
+    lv_obj_align(info_container, LV_ALIGN_CENTER, 0, -80);  // 向下移动，更靠近播放控制
+    lv_obj_set_style_bg_opa(info_container, LV_OPA_TRANSP, 0);  // 透明背景
+    lv_obj_set_style_border_width(info_container, 0, 0);  // 无边框
+    lv_obj_set_style_pad_all(info_container, 20, 0);
+    lv_obj_clear_flag(info_container, LV_OBJ_FLAG_SCROLLABLE);
+    
+    // 封面图（灰色正方形）
+    lv_obj_t* cover_art = lv_obj_create(info_container);
+    lv_coord_t cover_size = 200;
+    lv_obj_set_size(cover_art, cover_size, cover_size);
+    lv_obj_align(cover_art, LV_ALIGN_LEFT_MID, 0, 0);  // 居中对齐
+    lv_obj_set_style_bg_color(cover_art, lv_color_hex(0x808080), 0);  // 灰色
+    lv_obj_set_style_bg_opa(cover_art, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(cover_art, 0, 0);  // 无边框
+    lv_obj_set_style_radius(cover_art, 10, 0);
+    lv_obj_clear_flag(cover_art, LV_OBJ_FLAG_SCROLLABLE);
+    
+    // 音乐标题信息区域
+    lv_obj_t* text_info_container = lv_obj_create(info_container);
+    lv_obj_set_size(text_info_container, main_width - 280, cover_size);
+    lv_obj_align_to(text_info_container, cover_art, LV_ALIGN_OUT_RIGHT_MID, 30, 0);
+    lv_obj_set_style_bg_opa(text_info_container, LV_OPA_TRANSP, 0);  // 透明背景
+    lv_obj_set_style_border_width(text_info_container, 0, 0);  // 无边框
+    lv_obj_set_style_pad_all(text_info_container, 0, 0);
+    lv_obj_clear_flag(text_info_container, LV_OBJ_FLAG_SCROLLABLE);
     
     // 当前歌曲标签
-    g_current_song_label = lv_label_create(song_info_panel);
+    g_current_song_label = lv_label_create(text_info_container);
     lv_label_set_text(g_current_song_label, "No song selected");
-    lv_obj_set_style_text_color(g_current_song_label, lv_color_hex(0x333333), 0);
-    lv_obj_set_style_text_font(g_current_song_label, &lv_font_montserrat_20, 0);
-    lv_obj_align(g_current_song_label, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_style_text_color(g_current_song_label, lv_color_hex(0xFFFFFF), 0);  // 白色文字
+    lv_obj_set_style_text_font(g_current_song_label, &lv_font_montserrat_24, 0);
+    lv_obj_align(g_current_song_label, LV_ALIGN_TOP_LEFT, 0, 10);
+    lv_label_set_long_mode(g_current_song_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(g_current_song_label, main_width - 280);
     
     // 进度条
-    g_progress_bar = lv_bar_create(song_info_panel);
-    lv_obj_set_size(g_progress_bar, SCREEN_WIDTH - 80, 8);
+    g_progress_bar = lv_bar_create(text_info_container);
+    lv_obj_set_size(g_progress_bar, main_width - 300, 8);
     lv_obj_align(g_progress_bar, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(g_progress_bar, lv_color_hex(0xE0E0E0), 0);
-    lv_obj_set_style_bg_color(g_progress_bar, lv_color_hex(0x2196F3), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(g_progress_bar, lv_color_hex(0xFFFFFF), 0);  // 白色背景
+    lv_obj_set_style_bg_opa(g_progress_bar, LV_OPA_30, 0);  // 半透明
+    lv_obj_set_style_bg_color(g_progress_bar, lv_color_hex(0xFFFFFF), LV_PART_INDICATOR);  // 白色进度
+    lv_obj_set_style_border_width(g_progress_bar, 0, 0);  // 无边框
+    lv_obj_set_style_radius(g_progress_bar, 4, 0);
     lv_bar_set_value(g_progress_bar, 0, LV_ANIM_OFF);
     
     // 时间标签
-    g_time_label = lv_label_create(song_info_panel);
+    g_time_label = lv_label_create(text_info_container);
     lv_label_set_text(g_time_label, "00:00 / 00:00");
-    lv_obj_set_style_text_color(g_time_label, lv_color_hex(0x666666), 0);
+    lv_obj_set_style_text_color(g_time_label, lv_color_hex(0xFFFFFF), 0);  // 白色文字
     lv_obj_set_style_text_font(g_time_label, &lv_font_montserrat_16, 0);
-    lv_obj_align(g_time_label, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_align(g_time_label, LV_ALIGN_BOTTOM_LEFT, 0, -10);
     
-    // 创建播放控制按钮区域
-    lv_obj_t* control_panel = lv_obj_create(app->container);
-    lv_obj_set_size(control_panel, SCREEN_WIDTH - 40, 100);
-    lv_obj_align(control_panel, LV_ALIGN_TOP_MID, 0, 210);
-    lv_obj_set_style_bg_color(control_panel, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_border_width(control_panel, 2, 0);
-    lv_obj_set_style_border_color(control_panel, lv_color_hex(0xDDDDDD), 0);
-    lv_obj_set_style_radius(control_panel, 10, 0);
-    lv_obj_set_style_pad_all(control_panel, 20, 0);
+    /* === 右侧下半部分：播放控制 === */
+    lv_obj_t* control_container = lv_obj_create(main_container);
+    lv_obj_set_size(control_container, main_width - 40, screen_height / 2 - 80);  // 稍微减小高度为上部分让出空间
+    lv_obj_align(control_container, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_set_style_bg_opa(control_container, LV_OPA_TRANSP, 0);  // 透明背景
+    lv_obj_set_style_border_width(control_container, 0, 0);  // 无边框
+    lv_obj_set_style_pad_all(control_container, 20, 0);
+    lv_obj_clear_flag(control_container, LV_OBJ_FLAG_SCROLLABLE);
+    
+    // 播放控制按钮容器
+    lv_obj_t* button_container = lv_obj_create(control_container);
+    lv_obj_set_size(button_container, 400, 100);
+    lv_obj_align(button_container, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_opa(button_container, LV_OPA_TRANSP, 0);  // 透明背景
+    lv_obj_set_style_border_width(button_container, 0, 0);  // 无边框
+    lv_obj_set_style_pad_all(button_container, 0, 0);
+    lv_obj_clear_flag(button_container, LV_OBJ_FLAG_SCROLLABLE);
     
     // 上一曲按钮
-    g_prev_btn = lv_btn_create(control_panel);
-    lv_obj_set_size(g_prev_btn, 80, 60);
+    g_prev_btn = lv_btn_create(button_container);
+    lv_obj_set_size(g_prev_btn, 80, 80);
     lv_obj_align(g_prev_btn, LV_ALIGN_LEFT_MID, 0, 0);
-    lv_obj_set_style_bg_color(g_prev_btn, lv_color_hex(0x4CAF50), 0);
-    lv_obj_set_style_radius(g_prev_btn, 15, 0);
+    lv_obj_set_style_bg_opa(g_prev_btn, LV_OPA_TRANSP, 0);  // 透明背景
+    lv_obj_set_style_border_width(g_prev_btn, 0, 0);  // 无边框
+    lv_obj_set_style_shadow_width(g_prev_btn, 0, 0);  // 无阴影
     lv_obj_add_event_cb(g_prev_btn, prev_button_event_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t* prev_label = lv_label_create(g_prev_btn);
     lv_label_set_text(prev_label, LV_SYMBOL_PREV);
-    lv_obj_set_style_text_color(prev_label, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_text_font(prev_label, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(prev_label, lv_color_hex(0xFFFFFF), 0);  // 白色文字
+    lv_obj_set_style_text_font(prev_label, &lv_font_montserrat_32, 0);
     lv_obj_center(prev_label);
     
     // 播放/暂停按钮
-    g_play_pause_btn = lv_btn_create(control_panel);
-    lv_obj_set_size(g_play_pause_btn, 80, 60);
+    g_play_pause_btn = lv_btn_create(button_container);
+    lv_obj_set_size(g_play_pause_btn, 100, 100);
     lv_obj_align(g_play_pause_btn, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(g_play_pause_btn, lv_color_hex(0x2196F3), 0);
-    lv_obj_set_style_radius(g_play_pause_btn, 15, 0);
+    lv_obj_set_style_bg_opa(g_play_pause_btn, LV_OPA_TRANSP, 0);  // 透明背景
+    lv_obj_set_style_border_width(g_play_pause_btn, 0, 0);  // 无边框
+    lv_obj_set_style_shadow_width(g_play_pause_btn, 0, 0);  // 无阴影
     lv_obj_add_event_cb(g_play_pause_btn, play_pause_button_event_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t* play_label = lv_label_create(g_play_pause_btn);
     lv_label_set_text(play_label, LV_SYMBOL_PLAY);
-    lv_obj_set_style_text_color(play_label, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_text_font(play_label, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(play_label, lv_color_hex(0xFFFFFF), 0);  // 白色文字
+    lv_obj_set_style_text_font(play_label, &lv_font_montserrat_40, 0);
     lv_obj_center(play_label);
     
     // 下一曲按钮
-    g_next_btn = lv_btn_create(control_panel);
-    lv_obj_set_size(g_next_btn, 80, 60);
+    g_next_btn = lv_btn_create(button_container);
+    lv_obj_set_size(g_next_btn, 80, 80);
     lv_obj_align(g_next_btn, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_obj_set_style_bg_color(g_next_btn, lv_color_hex(0x4CAF50), 0);
-    lv_obj_set_style_radius(g_next_btn, 15, 0);
+    lv_obj_set_style_bg_opa(g_next_btn, LV_OPA_TRANSP, 0);  // 透明背景
+    lv_obj_set_style_border_width(g_next_btn, 0, 0);  // 无边框
+    lv_obj_set_style_shadow_width(g_next_btn, 0, 0);  // 无阴影
     lv_obj_add_event_cb(g_next_btn, next_button_event_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t* next_label = lv_label_create(g_next_btn);
     lv_label_set_text(next_label, LV_SYMBOL_NEXT);
-    lv_obj_set_style_text_color(next_label, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_text_font(next_label, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(next_label, lv_color_hex(0xFFFFFF), 0);  // 白色文字
+    lv_obj_set_style_text_font(next_label, &lv_font_montserrat_32, 0);
     lv_obj_center(next_label);
     
-    // 创建文件列表
-    lv_obj_t* list = lv_list_create(app->container);
-    lv_obj_set_size(list, SCREEN_WIDTH - 40, SCREEN_HEIGHT - 360);
-    lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 330);
-    lv_obj_set_style_bg_color(list, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_border_width(list, 2, 0);
-    lv_obj_set_style_border_color(list, lv_color_hex(0xDDDDDD), 0);
-    lv_obj_set_style_radius(list, 10, 0);
-    
-    // 初始化音乐数据
+    // 初始化音乐数据 (保持原有逻辑)
     g_music_data.play_state = PLAY_STATE_STOPPED;
     g_music_data.play_position = 0;
     g_music_data.play_duration = 0;
     g_music_data.repeat_mode = false;
     g_music_data.shuffle_mode = false;
     
-    // 保存UI元素到用户数据
+    // 保存UI元素到用户数据 (保持原有逻辑)
     app->user_data = list;
     
-    // 自动扫描一次
+    // 自动扫描一次 (保持原有逻辑)
     scan_mp3_files(&g_music_data);
     refresh_file_list(list);
     
-    // 初始化UI状态
+    // 初始化UI状态 (保持原有逻辑)
     update_playback_ui(app->container, &g_music_data);
     
-    // 创建定时器定期更新播放进度
+    // 创建定时器定期更新播放进度 (保持原有逻辑)
     lv_timer_create(ui_update_timer_cb, 1000, NULL);  // 每秒更新一次
 }
 
