@@ -9,6 +9,7 @@ void app_drawer_toggle(void);
 
 // 内存管理函数
 void app_drawer_cleanup_list(void);
+void app_drawer_check_cleanup(void);
 
 // 注册应用抽屉Overlay
 void register_drawer_overlay(void); 

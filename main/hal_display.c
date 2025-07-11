@@ -4,6 +4,10 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+// 需要访问BSP的显示配置常量
+#define BSP_LCD_DRAW_BUFF_SIZE   (BSP_LCD_H_RES * 50)
+#define BSP_LCD_DRAW_BUFF_DOUBLE (0)
+
 // Display global variables
 lv_disp_t *lvDisp = NULL;
 lv_indev_t *lvTouchpad = NULL;
@@ -71,8 +75,26 @@ void hal_display_init(void)
     // Reset touchpad
     bsp_reset_tp();
 
-    // Initialize display
-    lvDisp = bsp_display_start();
+    // 使用自定义配置启动显示
+    bsp_display_cfg_t display_cfg = {
+        .lvgl_port_cfg = {
+            .task_priority = 4,
+            .task_stack = 16384,  // 增加LVGL任务栈大小
+            .task_affinity = -1,
+            .task_max_sleep_ms = 500,
+            .timer_period_ms = 5,
+        },
+        .buffer_size = BSP_LCD_DRAW_BUFF_SIZE,
+        .double_buffer = BSP_LCD_DRAW_BUFF_DOUBLE,
+        .flags = {
+            .buff_dma = true,
+            .buff_spiram = true,  // 使用PSRAM缓冲区
+            .sw_rotate = true,
+        }
+    };
+
+    // Initialize display with custom config
+    lvDisp = bsp_display_start_with_config(&display_cfg);
     if (!lvDisp) {
         printf("Failed to start display\n");
         return;

@@ -93,4 +93,10 @@ overlay_t* app_manager_get_overlay_list(void);
 
 // 启动器相关
 void app_manager_go_to_launcher(void);
-bool app_manager_is_launcher_active(void); 
+bool app_manager_is_launcher_active(void);
+
+// 内存管理相关
+void app_manager_force_gc(void);
+void app_manager_log_memory_usage(const char* context);
+bool app_manager_check_memory_sufficient(void);
+void app_manager_get_memory_stats(uint32_t* gc_count, size_t* free_heap, size_t* free_psram); 

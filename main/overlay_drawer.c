@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 // 抽屉状态
 typedef struct {
@@ -17,6 +20,9 @@ typedef struct {
     lv_obj_t* brightness_label;
     bool is_open;
     bool is_initialized;  // 添加初始化标志
+    bool deep_cleaned;    // 是否进行了深度清理
+    uint32_t last_open_time;  // 上次打开时间
+    uint32_t idle_cleanup_threshold;  // 空闲清理阈值（毫秒）
     lv_anim_t slide_anim;
 } drawer_state_t;
 
@@ -52,6 +58,9 @@ static void slide_anim_ready_cb(lv_anim_t* a) {
         // 同时隐藏抽屉容器，确保不会拦截事件
         lv_obj_add_flag(state->drawer_container, LV_OBJ_FLAG_HIDDEN);
         printf("Drawer completely closed and hidden\n");
+        
+        // 标记可以安全清理（但不立即清理）
+        state->last_open_time = esp_timer_get_time() / 1000;
     }
 }
 
@@ -174,12 +183,21 @@ static void drawer_overlay_create(app_t* app) {
         return;
     }
     
+    printf("Creating app drawer overlay with smart memory management\n");
+    app_manager_log_memory_usage("Before drawer creation");
+    
     // 创建抽屉状态
     drawer_state_t* state = (drawer_state_t*)malloc(sizeof(drawer_state_t));
     if (!state) {
+        printf("Failed to allocate drawer state\n");
         return;
     }
     memset(state, 0, sizeof(drawer_state_t));
+    
+    // 初始化内存管理参数
+    state->idle_cleanup_threshold = 30000; // 30秒后清理
+    state->last_open_time = 0;
+    state->deep_cleaned = false;
     
     // 获取屏幕尺寸
     lv_coord_t screen_width = lv_display_get_horizontal_resolution(NULL);
@@ -320,6 +338,10 @@ static void drawer_overlay_destroy(app_t* app) {
             }
         }
         
+        // 确保LVGL任务完成
+        lv_refr_now(NULL);
+        vTaskDelay(pdMS_TO_TICKS(5));
+        
         free(state);
         app->user_data = NULL;
     }
@@ -340,11 +362,21 @@ void app_drawer_open(void) {
         return;
     }
     
-    // 延迟加载：只在第一次打开时创建应用列表
-    if (!state->is_initialized) {
-        printf("First time opening drawer, creating app list...\n");
+    // 记录打开时间
+    state->last_open_time = esp_timer_get_time() / 1000;
+    
+    // 延迟加载：只在第一次打开或被清理后重新创建应用列表
+    if (!state->is_initialized || state->deep_cleaned) {
+        printf("Creating/recreating app list (initialized: %s, deep_cleaned: %s)\n",
+               state->is_initialized ? "true" : "false",
+               state->deep_cleaned ? "true" : "false");
+        app_manager_log_memory_usage("Before app list creation");
+        
         refresh_app_list(state->app_list, true);
         state->is_initialized = true;
+        state->deep_cleaned = false;
+        
+        app_manager_log_memory_usage("After app list creation");
     }
     
     // 显示背景
@@ -427,6 +459,60 @@ void register_drawer_overlay(void) {
                                  50, true);  // z_index=50, auto_start=true
 } 
 
+// 深度清理抽屉内存
+static void deep_clean_drawer(drawer_state_t* state) {
+    if (!state || state->is_open || state->deep_cleaned) {
+        return;
+    }
+    
+    printf("=== DEEP CLEANING DRAWER ===\n");
+    app_manager_log_memory_usage("Before drawer deep clean");
+    
+    // 安全清理应用列表
+    if (state->app_list && lv_obj_is_valid(state->app_list)) {
+        // 检查对象是否仍然有效
+        if (lv_obj_get_parent(state->app_list) != NULL) {
+            // 先停止所有可能的动画
+            lv_anim_del(state->app_list, NULL);
+            
+            // 安全获取子对象数量
+            uint32_t child_count = lv_obj_get_child_count(state->app_list);
+            
+            // 从后往前删除子对象，避免索引问题
+            for (int32_t i = (int32_t)child_count - 1; i >= 0; i--) {
+                lv_obj_t* child = lv_obj_get_child(state->app_list, i);
+                if (child && lv_obj_is_valid(child)) {
+                    cleanup_app_item(child);
+                    lv_obj_del(child);
+                }
+            }
+            
+            printf("Cleaned %lu app items from drawer\n", (unsigned long)child_count);
+        } else {
+            printf("App list parent is null, skipping cleanup\n");
+        }
+    } else {
+        printf("App list is invalid or null, skipping cleanup\n");
+    }
+    
+    // 重置初始化标志，下次打开时重新创建
+    state->is_initialized = false;
+    state->deep_cleaned = true;
+    
+    printf("App drawer deep cleaned\n");
+    app_manager_log_memory_usage("After drawer deep clean");
+}
+
+// 检查是否需要进行空闲清理
+static bool should_idle_cleanup(drawer_state_t* state) {
+    if (!state || state->is_open || state->deep_cleaned) {
+        return false;
+    }
+    
+    uint32_t current_time = esp_timer_get_time() / 1000;
+    return (current_time - state->last_open_time) > state->idle_cleanup_threshold;
+}
+
 // 强制清理应用列表以释放内存
 void app_drawer_cleanup_list(void) {
     overlay_t* overlay = app_manager_get_overlay("AppDrawer");
@@ -437,23 +523,43 @@ void app_drawer_cleanup_list(void) {
     drawer_state_t* state = (drawer_state_t*)overlay->base.user_data;
     if (state->is_open) {
         // 抽屉打开时不清理
+        printf("Drawer is open, skipping cleanup\n");
+        return;
+    }
+    
+    // 检查是否有正在进行的动画
+    if (lv_anim_count_running()) {
+        printf("Animations running, skipping drawer cleanup\n");
+        return;
+    }
+    
+    // 确保抽屉已经关闭足够长时间
+    uint32_t current_time = esp_timer_get_time() / 1000;
+    if (state->last_open_time > 0 && (current_time - state->last_open_time) < 1000) {
+        printf("Drawer recently closed, skipping cleanup\n");
         return;
     }
     
     printf("Force cleaning app drawer list to free memory\n");
     
-    // 清理应用列表
-    if (state->app_list) {
-        uint32_t child_count = lv_obj_get_child_count(state->app_list);
-        for (uint32_t i = 0; i < child_count; i++) {
-            lv_obj_t* child = lv_obj_get_child(state->app_list, i);
-            cleanup_app_item(child);
-        }
-        lv_obj_clean(state->app_list);
-    }
-    
-    // 重置初始化标志，下次打开时重新创建
-    state->is_initialized = false;
+    // 执行深度清理
+    deep_clean_drawer(state);
     
     printf("App drawer list cleaned\n");
+}
+
+// 智能内存管理 - 检查是否需要清理
+void app_drawer_check_cleanup(void) {
+    overlay_t* overlay = app_manager_get_overlay("AppDrawer");
+    if (!overlay || !overlay->base.user_data) {
+        return;
+    }
+    
+    drawer_state_t* state = (drawer_state_t*)overlay->base.user_data;
+    
+    // 检查是否需要空闲清理
+    if (should_idle_cleanup(state)) {
+        printf("Idle cleanup triggered for app drawer\n");
+        deep_clean_drawer(state);
+    }
 } 
