@@ -11,13 +11,15 @@
 // 页面类型枚举
 typedef enum {
     PAGE_TYPE_MAIN,
-    PAGE_TYPE_MECHANICS,
-    PAGE_TYPE_SOUND,
-    PAGE_TYPE_DISPLAY,
-    PAGE_TYPE_SOFTWARE_INFO,
-    PAGE_TYPE_LEGAL_INFO,
     PAGE_TYPE_ABOUT,
-    PAGE_TYPE_MENU_MODE,
+    PAGE_TYPE_INTERNET,
+    PAGE_TYPE_BLUETOOTH,
+    PAGE_TYPE_M5UNIT,
+    PAGE_TYPE_ESP_NOW,
+    PAGE_TYPE_DISPLAY,
+    PAGE_TYPE_BATTERY,
+    PAGE_TYPE_SOUND,
+    PAGE_TYPE_DEVELOPER,
     PAGE_TYPE_COUNT
 } settings_page_type_t;
 
@@ -38,22 +40,24 @@ typedef struct {
     bool is_initialized;
 } settings_state_t;
 
-// 全局状态变量 - 使用PSRAM来存储状态
+// 全局状态变量
 static settings_state_t* g_settings_state = NULL;
 
 // 前向声明
 static void create_page_on_demand(settings_page_type_t page_type);
 static void cleanup_unused_pages(void);
 static void page_event_handler(lv_event_t* e);
-static lv_obj_t* create_mechanics_page(lv_obj_t* menu);
-static lv_obj_t* create_sound_page(lv_obj_t* menu);
-static lv_obj_t* create_display_page(lv_obj_t* menu);
-static lv_obj_t* create_software_info_page(lv_obj_t* menu);
-static lv_obj_t* create_legal_info_page(lv_obj_t* menu);
 static lv_obj_t* create_about_page(lv_obj_t* menu);
-static lv_obj_t* create_menu_mode_page(lv_obj_t* menu);
+static lv_obj_t* create_internet_page(lv_obj_t* menu);
+static lv_obj_t* create_bluetooth_page(lv_obj_t* menu);
+static lv_obj_t* create_m5unit_page(lv_obj_t* menu);
+static lv_obj_t* create_esp_now_page(lv_obj_t* menu);
+static lv_obj_t* create_display_page(lv_obj_t* menu);
+static lv_obj_t* create_battery_page(lv_obj_t* menu);
+static lv_obj_t* create_sound_page(lv_obj_t* menu);
+static lv_obj_t* create_developer_page(lv_obj_t* menu);
 
-// 安全的内存分配函数 - 优先使用PSRAM
+// 安全的内存分配函数
 static void* safe_malloc(size_t size) {
     void* ptr = NULL;
     
@@ -84,103 +88,157 @@ static void safe_free(void* ptr) {
     }
 }
 
-// 页面创建函数
-static lv_obj_t* create_mechanics_page(lv_obj_t* menu) {
-    printf("Creating mechanics page\n");
-    
-    lv_obj_t* page = lv_menu_page_create(menu, NULL);
-    lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
-    lv_menu_separator_create(page);
-    lv_obj_t* section = lv_menu_section_create(page);
-    
-    menu_create_slider(section, LV_SYMBOL_SETTINGS, "Velocity", 0, 150, 120);
-    menu_create_slider(section, LV_SYMBOL_SETTINGS, "Acceleration", 0, 150, 50);
-    menu_create_slider(section, LV_SYMBOL_SETTINGS, "Weight limit", 0, 150, 80);
-    
-    return page;
-}
-
-static lv_obj_t* create_sound_page(lv_obj_t* menu) {
-    printf("Creating sound page\n");
-    
-    lv_obj_t* page = lv_menu_page_create(menu, NULL);
-    lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
-    lv_menu_separator_create(page);
-    lv_obj_t* section = lv_menu_section_create(page);
-    
-    menu_create_switch(section, LV_SYMBOL_AUDIO, "Sound", false);
-    
-    return page;
-}
-
-static lv_obj_t* create_display_page(lv_obj_t* menu) {
-    printf("Creating display page\n");
-    
-    lv_obj_t* page = lv_menu_page_create(menu, NULL);
-    lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
-    lv_menu_separator_create(page);
-    lv_obj_t* section = lv_menu_section_create(page);
-    
-    menu_create_slider(section, LV_SYMBOL_SETTINGS, "Brightness", 0, 150, 100);
-    
-    return page;
-}
-
-static lv_obj_t* create_software_info_page(lv_obj_t* menu) {
-    printf("Creating software info page\n");
-    
-    lv_obj_t* page = lv_menu_page_create(menu, NULL);
-    lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
-    lv_obj_t* section = lv_menu_section_create(page);
-    
-    menu_create_text(section, NULL, "Version 1.0", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    
-    return page;
-}
-
-static lv_obj_t* create_legal_info_page(lv_obj_t* menu) {
-    printf("Creating legal info page\n");
-    
-    lv_obj_t* page = lv_menu_page_create(menu, NULL);
-    lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
-    lv_obj_t* section = lv_menu_section_create(page);
-    
-    for(uint32_t i = 0; i < 5; i++) {  // 减少文本数量以节省内存
-        menu_create_text(section, NULL,
-                    "This is a text item for legal information.",
-                    LV_MENU_ITEM_BUILDER_VARIANT_1);
-    }
-    
-    return page;
-}
-
+// About页面创建函数
 static lv_obj_t* create_about_page(lv_obj_t* menu) {
-    printf("Creating about page\n");
+    printf("Creating About page\n");
     
-    lv_obj_t* page = lv_menu_page_create(menu, NULL);
+    lv_obj_t* page = lv_menu_page_create(menu, "About");
     lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
     lv_menu_separator_create(page);
     lv_obj_t* section = lv_menu_section_create(page);
     
-    lv_obj_t* cont = menu_create_text(section, NULL, "Software information", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_SOFTWARE_INFO);
-    
-    cont = menu_create_text(section, NULL, "Legal information", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_LEGAL_INFO);
+    // 设备信息
+    menu_create_text(section, LV_SYMBOL_SETTINGS, "Device: M5Tab5", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(section, LV_SYMBOL_SETTINGS, "Chip: ESP32P4", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(section, LV_SYMBOL_SETTINGS, "RAM: 512KB", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(section, LV_SYMBOL_SETTINGS, "PSRAM: 32MB", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(section, LV_SYMBOL_SETTINGS, "Flash: 16MB", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(section, LV_SYMBOL_SETTINGS, "ImOS beta0.1", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(section, LV_SYMBOL_SETTINGS, "KiwiOS Framework: V3", LV_MENU_ITEM_BUILDER_VARIANT_1);
     
     return page;
 }
 
-static lv_obj_t* create_menu_mode_page(lv_obj_t* menu) {
-    printf("Creating menu mode page\n");
+// Internet页面创建函数
+static lv_obj_t* create_internet_page(lv_obj_t* menu) {
+    printf("Creating Internet page\n");
     
-    lv_obj_t* page = lv_menu_page_create(menu, NULL);
+    lv_obj_t* page = lv_menu_page_create(menu, "Internet");
     lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
     lv_menu_separator_create(page);
     lv_obj_t* section = lv_menu_section_create(page);
     
-    lv_obj_t* cont = menu_create_switch(section, LV_SYMBOL_AUDIO, "Sidebar enable", true);
-    lv_obj_add_event_cb(lv_obj_get_child(cont, 2), menu_switch_handler, LV_EVENT_VALUE_CHANGED, menu);
+    // 网络选项
+    menu_create_text(section, LV_SYMBOL_WIFI, "WLAN", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(section, LV_SYMBOL_CALL, "4G", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    
+    return page;
+}
+
+// Bluetooth页面创建函数
+static lv_obj_t* create_bluetooth_page(lv_obj_t* menu) {
+    printf("Creating Bluetooth page\n");
+    
+    lv_obj_t* page = lv_menu_page_create(menu, "Bluetooth");
+    lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
+    lv_menu_separator_create(page);
+    lv_obj_t* section = lv_menu_section_create(page);
+    
+    // 蓝牙开关
+    menu_create_switch(section, LV_SYMBOL_BLUETOOTH, "Bluetooth", false);
+    
+    // 空列表（显示"No devices found"）
+    lv_menu_separator_create(page);
+    lv_obj_t* section2 = lv_menu_section_create(page);
+    menu_create_text(section2, NULL, "No devices found", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    
+    return page;
+}
+
+// M5Unit页面创建函数
+static lv_obj_t* create_m5unit_page(lv_obj_t* menu) {
+    printf("Creating M5Unit page\n");
+    
+    lv_obj_t* page = lv_menu_page_create(menu, "M5Unit");
+    lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
+    lv_menu_separator_create(page);
+    lv_obj_t* section = lv_menu_section_create(page);
+    
+    // M5Unit接口
+    menu_create_text(section, LV_SYMBOL_USB, "Port A I2C", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(section, LV_SYMBOL_USB, "Port B UART", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(section, LV_SYMBOL_USB, "RS485", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    
+    return page;
+}
+
+// ESP-NOW页面创建函数
+static lv_obj_t* create_esp_now_page(lv_obj_t* menu) {
+    printf("Creating ESP-NOW page\n");
+    
+    lv_obj_t* page = lv_menu_page_create(menu, "ESP-NOW");
+    lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
+    lv_menu_separator_create(page);
+    lv_obj_t* section = lv_menu_section_create(page);
+    
+    // ESP-NOW设置
+    menu_create_slider(section, LV_SYMBOL_SETTINGS, "Channel", 1, 14, 1);
+    menu_create_text(section, LV_SYMBOL_ENVELOPE, "Messages", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    
+    return page;
+}
+
+// Display页面创建函数
+static lv_obj_t* create_display_page(lv_obj_t* menu) {
+    printf("Creating Display page\n");
+    
+    lv_obj_t* page = lv_menu_page_create(menu, "Display");
+    lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
+    lv_menu_separator_create(page);
+    lv_obj_t* section = lv_menu_section_create(page);
+    
+    // 亮度滑块
+    menu_create_slider(section, LV_SYMBOL_EYE_OPEN, "Brightness", 0, 100, 80);
+    
+    return page;
+}
+
+// Battery页面创建函数
+static lv_obj_t* create_battery_page(lv_obj_t* menu) {
+    printf("Creating Battery page\n");
+    
+    lv_obj_t* page = lv_menu_page_create(menu, "Battery");
+    lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
+    lv_menu_separator_create(page);
+    lv_obj_t* section = lv_menu_section_create(page);
+    
+    // 电池信息 - 使用文本显示电量
+    menu_create_text(section, LV_SYMBOL_BATTERY_FULL, "Battery Level: 85%", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(section, LV_SYMBOL_CHARGE, "Status: Not Charging", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    
+    return page;
+}
+
+// Sound页面创建函数
+static lv_obj_t* create_sound_page(lv_obj_t* menu) {
+    printf("Creating Sound page\n");
+    
+    lv_obj_t* page = lv_menu_page_create(menu, "Sound");
+    lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
+    lv_menu_separator_create(page);
+    lv_obj_t* section = lv_menu_section_create(page);
+    
+    // 音量设置
+    menu_create_slider(section, LV_SYMBOL_VOLUME_MAX, "Volume", 0, 100, 50);
+    menu_create_switch(section, LV_SYMBOL_MUTE, "Mute", false);
+    
+    return page;
+}
+
+// Developer页面创建函数
+static lv_obj_t* create_developer_page(lv_obj_t* menu) {
+    printf("Creating Developer page\n");
+    
+    lv_obj_t* page = lv_menu_page_create(menu, "Developer");
+    lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
+    lv_menu_separator_create(page);
+    lv_obj_t* section = lv_menu_section_create(page);
+    
+    // 开发者选项
+    menu_create_switch(section, LV_SYMBOL_SETTINGS, "Memory debug outputs", false);
+    menu_create_switch(section, LV_SYMBOL_WARNING, "Show errors as dialog", false);
+    menu_create_switch(section, LV_SYMBOL_BLUETOOTH, "BLE debug", false);
+    menu_create_switch(section, LV_SYMBOL_WIFI, "Wi-Fi AP debug portal", false);
     
     return page;
 }
@@ -199,7 +257,8 @@ static void page_event_handler(lv_event_t* e) {
     // 确保页面创建成功后立即导航
     if (g_settings_state->pages[page_type].is_created && g_settings_state->pages[page_type].page_obj) {
         printf("Navigating to page type %d\n", page_type);
-        // 直接设置页面并导航
+        
+        // 使用LVGL菜单的标准导航方法
         lv_menu_set_page(g_settings_state->menu, g_settings_state->pages[page_type].page_obj);
         
         // 更新当前页面
@@ -207,6 +266,8 @@ static void page_event_handler(lv_event_t* e) {
         
         // 清理未使用的页面
         cleanup_unused_pages();
+        
+        printf("Successfully navigated to page type %d\n", page_type);
     } else {
         printf("Failed to create or navigate to page type %d\n", page_type);
     }
@@ -227,26 +288,32 @@ static void create_page_on_demand(settings_page_type_t page_type) {
     lv_obj_t* page = NULL;
     
     switch (page_type) {
-        case PAGE_TYPE_MECHANICS:
-            page = create_mechanics_page(g_settings_state->menu);
+        case PAGE_TYPE_ABOUT:
+            page = create_about_page(g_settings_state->menu);
             break;
-        case PAGE_TYPE_SOUND:
-            page = create_sound_page(g_settings_state->menu);
+        case PAGE_TYPE_INTERNET:
+            page = create_internet_page(g_settings_state->menu);
+            break;
+        case PAGE_TYPE_BLUETOOTH:
+            page = create_bluetooth_page(g_settings_state->menu);
+            break;
+        case PAGE_TYPE_M5UNIT:
+            page = create_m5unit_page(g_settings_state->menu);
+            break;
+        case PAGE_TYPE_ESP_NOW:
+            page = create_esp_now_page(g_settings_state->menu);
             break;
         case PAGE_TYPE_DISPLAY:
             page = create_display_page(g_settings_state->menu);
             break;
-        case PAGE_TYPE_SOFTWARE_INFO:
-            page = create_software_info_page(g_settings_state->menu);
+        case PAGE_TYPE_BATTERY:
+            page = create_battery_page(g_settings_state->menu);
             break;
-        case PAGE_TYPE_LEGAL_INFO:
-            page = create_legal_info_page(g_settings_state->menu);
+        case PAGE_TYPE_SOUND:
+            page = create_sound_page(g_settings_state->menu);
             break;
-        case PAGE_TYPE_ABOUT:
-            page = create_about_page(g_settings_state->menu);
-            break;
-        case PAGE_TYPE_MENU_MODE:
-            page = create_menu_mode_page(g_settings_state->menu);
+        case PAGE_TYPE_DEVELOPER:
+            page = create_developer_page(g_settings_state->menu);
             break;
         default:
             printf("Unknown page type: %d\n", page_type);
@@ -302,10 +369,10 @@ static void settings_app_create(app_t* app) {
         return;
     }
     
-    printf("Creating settings app with lazy loading\n");
+    printf("Creating settings app with new menu structure\n");
     app_manager_log_memory_usage("Before settings app creation");
     
-    // 分配状态结构 - 优先使用PSRAM
+    // 分配状态结构
     g_settings_state = (settings_state_t*)safe_malloc(sizeof(settings_state_t));
     if (!g_settings_state) {
         printf("Failed to allocate memory for settings state\n");
@@ -331,29 +398,49 @@ static void settings_app_create(app_t* app) {
     lv_obj_set_size(menu, LV_PCT(100), LV_PCT(100));
     lv_obj_set_pos(menu, 0, 0);
 
-    // 创建主页面（总是创建）
+    // 创建主页面
     g_settings_state->root_page = lv_menu_page_create(menu, "Settings");
     lv_obj_set_style_pad_hor(g_settings_state->root_page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
     lv_obj_t* section = lv_menu_section_create(g_settings_state->root_page);
     
-    // 创建主页面的菜单项（但不创建子页面）
-    lv_obj_t* cont = menu_create_text(section, LV_SYMBOL_SETTINGS, "Mechanics", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_MECHANICS);
+    // 创建第一级菜单项 - 使用正确的方法
+    lv_obj_t* cont;
     
-    cont = menu_create_text(section, LV_SYMBOL_AUDIO, "Sound", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_SOUND);
-    
-    cont = menu_create_text(section, LV_SYMBOL_SETTINGS, "Display", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_DISPLAY);
-
-    menu_create_text(g_settings_state->root_page, NULL, "Others", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    section = lv_menu_section_create(g_settings_state->root_page);
-    
-    cont = menu_create_text(section, NULL, "About", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    // About
+    cont = menu_create_text(section, LV_SYMBOL_HOME, "About", LV_MENU_ITEM_BUILDER_VARIANT_1);
     lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_ABOUT);
     
-    cont = menu_create_text(section, LV_SYMBOL_SETTINGS, "Menu mode", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_MENU_MODE);
+    // Internet
+    cont = menu_create_text(section, LV_SYMBOL_WIFI, "Internet", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_INTERNET);
+    
+    // Bluetooth
+    cont = menu_create_text(section, LV_SYMBOL_BLUETOOTH, "Bluetooth", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_BLUETOOTH);
+    
+    // M5Unit
+    cont = menu_create_text(section, LV_SYMBOL_USB, "M5Unit", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_M5UNIT);
+    
+    // ESP-NOW
+    cont = menu_create_text(section, LV_SYMBOL_SETTINGS, "ESP-NOW", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_ESP_NOW);
+    
+    // Display
+    cont = menu_create_text(section, LV_SYMBOL_EYE_OPEN, "Display", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_DISPLAY);
+    
+    // Battery
+    cont = menu_create_text(section, LV_SYMBOL_BATTERY_FULL, "Battery", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_BATTERY);
+    
+    // Sound
+    cont = menu_create_text(section, LV_SYMBOL_VOLUME_MAX, "Sound", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_SOUND);
+    
+    // Developer
+    cont = menu_create_text(section, LV_SYMBOL_SETTINGS, "Developer", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_DEVELOPER);
 
     lv_menu_set_sidebar_page(menu, g_settings_state->root_page);
 
@@ -363,13 +450,11 @@ static void settings_app_create(app_t* app) {
     g_settings_state->pages[PAGE_TYPE_MAIN].type = PAGE_TYPE_MAIN;
     g_settings_state->current_page = PAGE_TYPE_MAIN;
     
-    lv_obj_send_event(lv_obj_get_child(lv_obj_get_child(lv_menu_get_cur_sidebar_page(menu), 0), 0), LV_EVENT_CLICKED, NULL);
-    
     // 保存状态到用户数据
     app->user_data = g_settings_state;
     g_settings_state->is_initialized = true;
     
-    printf("Settings app created with lazy loading enabled\n");
+    printf("Settings app created with new menu structure\n");
     app_manager_log_memory_usage("After settings app creation");
 }
 
@@ -383,10 +468,7 @@ static void settings_app_destroy(app_t* app) {
     app_manager_log_memory_usage("Before settings app destruction");
     
     if (g_settings_state) {
-        // 重要：不要手动删除页面对象！
-        // 它们会在菜单销毁时自动删除，手动删除会导致双重释放
-        
-        // 只需要重置状态标志
+        // 重置状态标志
         for (int i = 0; i < PAGE_TYPE_COUNT; i++) {
             g_settings_state->pages[i].page_obj = NULL;
             g_settings_state->pages[i].is_created = false;

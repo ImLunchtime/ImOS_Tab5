@@ -61,6 +61,10 @@ lv_obj_t * menu_create_text(lv_obj_t * parent, const char * icon, const char * t
         lv_obj_swap(img, label);
     }
 
+    // 确保容器是可点击的
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+
     return obj;
 }
 

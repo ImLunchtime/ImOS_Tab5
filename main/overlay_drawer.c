@@ -13,7 +13,7 @@
 typedef struct {
     lv_obj_t* drawer_container;
     lv_obj_t* app_list;
-    lv_obj_t* background;
+    //lv_obj_t* background;
     lv_obj_t* volume_slider;
     lv_obj_t* brightness_slider;
     lv_obj_t* volume_label;
@@ -54,7 +54,7 @@ static void slide_anim_ready_cb(lv_anim_t* a) {
     drawer_state_t* state = (drawer_state_t*)a->user_data;
     if (!state->is_open) {
         // 抽屉关闭后隐藏背景
-        lv_obj_add_flag(state->background, LV_OBJ_FLAG_HIDDEN);
+        //lv_obj_add_flag(state->background, LV_OBJ_FLAG_HIDDEN);
         // 同时隐藏抽屉容器，确保不会拦截事件
         lv_obj_add_flag(state->drawer_container, LV_OBJ_FLAG_HIDDEN);
         printf("Drawer completely closed and hidden\n");
@@ -235,18 +235,18 @@ static void drawer_overlay_create(app_t* app) {
     lv_coord_t drawer_width = screen_width / 4;  // 1/4屏幕宽度
     
     // 先创建简化的半透明背景
-    state->background = lv_obj_create(app->container);
-    lv_obj_set_size(state->background, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_pos(state->background, 0, 0);
-    lv_obj_set_style_bg_color(state->background, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(state->background, LV_OPA_30, 0);  // 降低透明度减少GPU负担
-    lv_obj_set_style_border_width(state->background, 0, 0);
-    lv_obj_set_style_pad_all(state->background, 0, 0);
-    lv_obj_add_flag(state->background, LV_OBJ_FLAG_HIDDEN);  // 初始隐藏
+    // state->background = lv_obj_create(app->container);
+    // lv_obj_set_size(state->background, LV_PCT(100), LV_PCT(100));
+    // lv_obj_set_pos(state->background, 0, 0);
+    // lv_obj_set_style_bg_color(state->background, lv_color_hex(0x000000), 0);
+    // lv_obj_set_style_bg_opa(state->background, LV_OPA_30, 0);  // 降低透明度减少GPU负担
+    // lv_obj_set_style_border_width(state->background, 0, 0);
+    // lv_obj_set_style_pad_all(state->background, 0, 0);
+    // lv_obj_add_flag(state->background, LV_OBJ_FLAG_HIDDEN);  // 初始隐藏
     
     // 确保背景能接收点击事件
-    lv_obj_clear_flag(state->background, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_event_cb(state->background, background_event_cb, LV_EVENT_CLICKED, NULL);
+    //lv_obj_clear_flag(state->background, LV_OBJ_FLAG_SCROLLABLE);
+    //lv_obj_add_event_cb(state->background, background_event_cb, LV_EVENT_CLICKED, NULL);
     
     // 创建抽屉容器（在背景之后创建，确保在上层）
     state->drawer_container = lv_obj_create(app->container);
@@ -411,14 +411,14 @@ void app_drawer_open(void) {
     }
     
     // 显示背景
-    lv_obj_clear_flag(state->background, LV_OBJ_FLAG_HIDDEN);
+    //lv_obj_clear_flag(state->background, LV_OBJ_FLAG_HIDDEN);
     
     // 确保抽屉容器可见
     lv_obj_clear_flag(state->drawer_container, LV_OBJ_FLAG_HIDDEN);
     
     // 强制刷新显示
     lv_obj_invalidate(state->drawer_container);
-    lv_obj_invalidate(state->background);
+    //lv_obj_invalidate(state->background);
     
     // 创建滑动动画
     lv_anim_init(&state->slide_anim);
