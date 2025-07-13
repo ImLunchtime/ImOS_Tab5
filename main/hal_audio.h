@@ -31,6 +31,20 @@ void hal_set_speaker_volume(uint8_t volume);
 uint8_t hal_get_speaker_volume(void);
 
 /**
+ * @brief Set speaker enable/disable
+ * 
+ * @param enable true to enable speaker, false to disable
+ */
+void hal_set_speaker_enable(bool enable);
+
+/**
+ * @brief Get current speaker enable state
+ * 
+ * @return true if speaker is enabled, false if disabled
+ */
+bool hal_get_speaker_enable(void);
+
+/**
  * @brief Simple audio playback function
  * 
  * @param data Pointer to audio data buffer (16-bit PCM)

@@ -53,6 +53,7 @@ typedef struct {
     lv_obj_t* brightness_slider;
     lv_obj_t* volume_label;
     lv_obj_t* brightness_label;
+    lv_obj_t* speaker_switch;  // 扬声器开关
     bool is_open;
     bool is_initialized;  // 添加初始化标志
     bool deep_cleaned;    // 是否进行了深度清理
@@ -131,6 +132,31 @@ static void brightness_slider_event_cb(lv_event_t* e) {
             // 更新标签显示
             lv_label_set_text_fmt(state->brightness_label, "亮度: %d%%", (int)value);
             printf("Brightness changed to: %d%%\n", (int)value);
+        }
+    }
+}
+
+// 扬声器开关事件回调
+static void speaker_switch_event_cb(lv_event_t* e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t* switch_obj = lv_event_get_target(e);
+    
+    printf("Speaker switch event: code=%d\n", code);
+    
+    if (code == LV_EVENT_VALUE_CHANGED || code == LV_EVENT_CLICKED) {
+        drawer_state_t* state = (drawer_state_t*)lv_event_get_user_data(e);
+        if (state) {
+            // 获取开关的当前状态
+            bool enabled = lv_obj_has_state(switch_obj, LV_STATE_CHECKED);
+            printf("Switch state: %s\n", enabled ? "checked" : "unchecked");
+            
+            // 调用HAL函数设置扬声器状态
+            hal_set_speaker_enable(enabled);
+            
+            printf("Speaker %s\n", enabled ? "enabled" : "disabled");
+            
+            // 强制刷新显示
+            lv_obj_invalidate(switch_obj);
         }
     }
 }
@@ -350,6 +376,10 @@ static void drawer_overlay_create(app_t* app) {
     lv_obj_set_style_border_width(volume_container, 0, 0);
     lv_obj_set_style_pad_all(volume_container, 8, 0);  // 增加内边距到8像素
     
+    // 确保音量容器不会阻止事件传递
+    lv_obj_clear_flag(volume_container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(volume_container, LV_OBJ_FLAG_EVENT_BUBBLE);
+    
     // 音量标签
     state->volume_label = lv_label_create(volume_container);
     lv_label_set_text_fmt(state->volume_label, "音量: %d%%", hal_get_speaker_volume());
@@ -357,9 +387,9 @@ static void drawer_overlay_create(app_t* app) {
     lv_obj_set_style_text_font(state->volume_label, &simhei_32, 0);  // 使用中文字体
     lv_obj_align(state->volume_label, LV_ALIGN_TOP_LEFT, 0, 0);
     
-    // 音量滑块
+    // 音量滑块 (调窄一些，为扬声器开关留出空间)
     state->volume_slider = lv_slider_create(volume_container);
-    lv_obj_set_size(state->volume_slider, LV_PCT(100), 18);  // 调整滑块高度到22像素
+    lv_obj_set_size(state->volume_slider, LV_PCT(50), 18);  // 调窄到50%宽度，为开关留出更多空间
     lv_obj_align_to(state->volume_slider, state->volume_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 8);  // 增加间距到8像素
     lv_slider_set_range(state->volume_slider, 0, 100);
     lv_slider_set_value(state->volume_slider, hal_get_speaker_volume(), LV_ANIM_OFF);
@@ -371,6 +401,47 @@ static void drawer_overlay_create(app_t* app) {
     
     // 添加音量滑块事件
     lv_obj_add_event_cb(state->volume_slider, volume_slider_event_cb, LV_EVENT_VALUE_CHANGED, state);
+    
+    // 扬声器开关 (移除标签，只保留开关)
+    state->speaker_switch = lv_switch_create(volume_container);
+    lv_obj_set_size(state->speaker_switch, 50, 25);  // 调整开关大小
+    lv_obj_align_to(state->speaker_switch, state->volume_slider, LV_ALIGN_OUT_RIGHT_MID, 15, 0);  // 放在滑块右边，减少间距
+    
+    // 设置开关状态
+    bool speaker_enabled = hal_get_speaker_enable();
+    printf("Initial speaker state: %s\n", speaker_enabled ? "enabled" : "disabled");
+    if (speaker_enabled) {
+        lv_obj_add_state(state->speaker_switch, LV_STATE_CHECKED);
+    } else {
+        lv_obj_clear_state(state->speaker_switch, LV_STATE_CHECKED);
+    }
+    
+    // 设置开关样式 (绿色主题)
+    lv_obj_set_style_bg_color(state->speaker_switch, lv_color_hex(0xCCCCCC), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(state->speaker_switch, lv_color_hex(0x00AA00), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(state->speaker_switch, lv_color_hex(0xFFFFFF), LV_PART_KNOB);
+    
+    // 确保开关可以点击
+    lv_obj_add_flag(state->speaker_switch, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(state->speaker_switch, LV_OBJ_FLAG_SCROLLABLE);
+    
+    // 添加扬声器开关事件 - 监听多种事件类型
+    lv_obj_add_event_cb(state->speaker_switch, speaker_switch_event_cb, LV_EVENT_VALUE_CHANGED, state);
+    lv_obj_add_event_cb(state->speaker_switch, speaker_switch_event_cb, LV_EVENT_CLICKED, state);
+    
+    printf("Speaker switch created and configured\n");
+    
+    // 测试：验证开关是否可点击
+    printf("Testing switch clickability...\n");
+    bool is_clickable = lv_obj_has_flag(state->speaker_switch, LV_OBJ_FLAG_CLICKABLE);
+    printf("Switch clickable: %s\n", is_clickable ? "true" : "false");
+    
+    // 调试：检查开关位置和大小
+    lv_coord_t switch_x = lv_obj_get_x(state->speaker_switch);
+    lv_coord_t switch_y = lv_obj_get_y(state->speaker_switch);
+    lv_coord_t switch_w = lv_obj_get_width(state->speaker_switch);
+    lv_coord_t switch_h = lv_obj_get_height(state->speaker_switch);
+    printf("Switch position: x=%ld, y=%ld, w=%ld, h=%ld\n", switch_x, switch_y, switch_w, switch_h);
     
     // 创建亮度控制区域
     lv_obj_t* brightness_container = lv_obj_create(state->drawer_container);
@@ -489,6 +560,15 @@ void app_drawer_open(void) {
     
     // 临时禁用手势处理，避免事件冲突
     gesture_handler_set_enabled(false);
+    
+    // 调试：检查扬声器开关状态
+    if (state->speaker_switch) {
+        bool switch_checked = lv_obj_has_state(state->speaker_switch, LV_STATE_CHECKED);
+        bool speaker_enabled = hal_get_speaker_enable();
+        printf("Drawer opened - Switch checked: %s, Speaker enabled: %s\n", 
+               switch_checked ? "true" : "false", 
+               speaker_enabled ? "true" : "false");
+    }
     
     printf("App drawer opened successfully\n");
 }

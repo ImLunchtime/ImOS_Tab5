@@ -7,12 +7,99 @@
 #include <freertos/semphr.h>
 #include <audio_player.h>
 #include <esp_err.h>
+#include <driver/i2c_master.h>
+
+// PI4IOE1寄存器定义
+#define PI4IO_REG_OUT_SET    0x0F
+#define PI4IO_REG_OUT_CLR    0x10
+#define PI4IO_REG_IN_STA     0x11
+
+// 扬声器使能引脚定义 (PI4IOE1 P1)
+#define SPEAKER_ENABLE_PIN   1
+
+// 全局I2C设备句柄
+static i2c_master_bus_handle_t g_i2c_bus_handle = NULL;
+static i2c_master_dev_handle_t g_pi4ioe1_handle = NULL;
+
+// 初始化PI4IOE1设备
+static esp_err_t init_pi4ioe1(void)
+{
+    if (g_pi4ioe1_handle != NULL) {
+        return ESP_OK; // 已经初始化
+    }
+    
+    g_i2c_bus_handle = bsp_i2c_get_handle();
+    if (g_i2c_bus_handle == NULL) {
+        printf("Failed to get I2C bus handle\n");
+        return ESP_FAIL;
+    }
+    
+    // PI4IOE1设备地址
+    i2c_device_config_t dev_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = 0x43, // PI4IOE1地址 (addr pin low)
+        .scl_speed_hz = 400000,
+    };
+    
+    esp_err_t ret = i2c_master_bus_add_device(g_i2c_bus_handle, &dev_cfg, &g_pi4ioe1_handle);
+    if (ret != ESP_OK) {
+        printf("Failed to add PI4IOE1 device: %s\n", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    printf("PI4IOE1 initialized successfully\n");
+    return ESP_OK;
+}
+
+// 控制扬声器使能
+static esp_err_t bsp_set_speaker_enable(bool enable)
+{
+    esp_err_t ret = init_pi4ioe1();
+    if (ret != ESP_OK) {
+        return ret;
+    }
+    
+    uint8_t write_buf[2] = {0};
+    uint8_t read_buf[1] = {0};
+    
+    // 读取当前输出状态
+    write_buf[0] = PI4IO_REG_OUT_SET;
+    ret = i2c_master_transmit_receive(g_pi4ioe1_handle, write_buf, 1, read_buf, 1, pdMS_TO_TICKS(100));
+    if (ret != ESP_OK) {
+        printf("Failed to read PI4IOE1 output state: %s\n", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    // 根据使能状态设置或清除P1位（扬声器使能）
+    uint8_t current_state = read_buf[0];
+    if (enable) {
+        // 设置P1位为高电平（扬声器开启）
+        current_state |= (1 << SPEAKER_ENABLE_PIN);
+    } else {
+        // 清除P1位为低电平（扬声器关闭）
+        current_state &= ~(1 << SPEAKER_ENABLE_PIN);
+    }
+    
+    // 写入新的输出状态
+    write_buf[0] = PI4IO_REG_OUT_SET;
+    write_buf[1] = current_state;
+    
+    ret = i2c_master_transmit(g_pi4ioe1_handle, write_buf, 2, pdMS_TO_TICKS(100));
+    if (ret != ESP_OK) {
+        printf("Failed to set speaker enable: %s\n", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    printf("Speaker %s (P1=%d)\n", enable ? "enabled" : "disabled", (current_state >> SPEAKER_ENABLE_PIN) & 1);
+    return ESP_OK;
+}
 
 // Audio state management
 typedef struct {
     bool is_initialized;
     bool is_playing;
     uint8_t current_volume;
+    bool speaker_enabled;  // 添加扬声器使能状态
     SemaphoreHandle_t audio_mutex;
 } audio_state_t;
 
@@ -31,6 +118,7 @@ static audio_state_t g_audio_state = {
     .is_initialized = false,
     .is_playing = false,
     .current_volume = 50,  // Default volume 50%
+    .speaker_enabled = true,  // 默认开启扬声器
     .audio_mutex = NULL
 };
 
@@ -80,6 +168,10 @@ void hal_audio_init(void)
         // This will be overridden by audio_player when playing MP3 files
         codec_handle->i2s_reconfig_clk_fn(44100, 16, I2S_SLOT_MODE_STEREO);
     }
+
+    // 初始化扬声器为开启状态
+    bsp_set_speaker_enable(true);
+    g_audio_state.speaker_enabled = true;
 
     g_audio_state.is_initialized = true;
     printf("Audio HAL initialized successfully\n");
@@ -586,4 +678,48 @@ uint32_t hal_audio_get_mp3_duration(void)
     }
     
     return duration;
+} 
+
+void hal_set_speaker_enable(bool enable)
+{
+    if (!g_audio_state.is_initialized) {
+        printf("Audio not initialized\n");
+        return;
+    }
+
+    if (xSemaphoreTake(g_audio_state.audio_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        g_audio_state.speaker_enabled = enable;
+        
+        // 调用BSP函数控制扬声器功放
+        esp_err_t ret = bsp_set_speaker_enable(enable);
+        if (ret != ESP_OK) {
+            printf("Failed to set speaker enable: %s\n", esp_err_to_name(ret));
+        }
+        
+        xSemaphoreGive(g_audio_state.audio_mutex);
+    }
+}
+
+bool hal_get_speaker_enable(void)
+{
+    if (!g_audio_state.is_initialized) {
+        return g_audio_state.speaker_enabled;
+    }
+    
+    // 尝试从硬件读取实际状态
+    if (g_pi4ioe1_handle != NULL) {
+        uint8_t write_buf[1] = {PI4IO_REG_OUT_SET};
+        uint8_t read_buf[1] = {0};
+        
+        esp_err_t ret = i2c_master_transmit_receive(g_pi4ioe1_handle, write_buf, 1, read_buf, 1, pdMS_TO_TICKS(100));
+        if (ret == ESP_OK) {
+            bool hardware_enabled = (read_buf[0] & (1 << SPEAKER_ENABLE_PIN)) != 0;
+            // 同步软件状态与硬件状态
+            g_audio_state.speaker_enabled = hardware_enabled;
+            return hardware_enabled;
+        }
+    }
+    
+    // 如果无法读取硬件状态，返回软件状态
+    return g_audio_state.speaker_enabled;
 } 

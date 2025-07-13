@@ -178,6 +178,13 @@ static void format_file_size(size_t size, char* buffer, size_t buffer_size) {
 // 扫描目录
 static void scan_directory(const char* path) {
     if (!g_file_manager_state || !path) {
+        printf("Invalid parameters for scan_directory\n");
+        return;
+    }
+    
+    // 检查路径长度
+    if (strlen(path) >= sizeof(g_file_manager_state->current_path)) {
+        printf("Path too long: %s\n", path);
         return;
     }
     
@@ -215,18 +222,37 @@ static void scan_directory(const char* path) {
         file_count++;
     }
     
+    // 如果不是根目录，需要为".."项预留空间
+    if (strcmp(path, g_file_manager_state->root_path) != 0) {
+        file_count++;
+    }
+    
     // 分配内存
     g_file_manager_state->files = (file_item_t*)safe_malloc(file_count * sizeof(file_item_t));
     if (!g_file_manager_state->files) {
-        printf("Failed to allocate memory for file list\n");
+        printf("Failed to allocate memory for file list (count: %lu)\n", (unsigned long)file_count);
         closedir(dir);
         g_file_manager_state->is_scanning = false;
         return;
     }
     
+    // 初始化内存
+    memset(g_file_manager_state->files, 0, file_count * sizeof(file_item_t));
+    
     // 重新扫描目录，填充文件信息
     rewinddir(dir);
     g_file_manager_state->file_count = 0;
+    
+    // 如果不是根目录，添加".."项
+    if (strcmp(path, g_file_manager_state->root_path) != 0) {
+        file_item_t* parent_file = &g_file_manager_state->files[g_file_manager_state->file_count];
+        strcpy(parent_file->name, "..");
+        parent_file->type = FILE_TYPE_PARENT;
+        parent_file->size = 0;
+        parent_file->modified_time = 0;
+        parent_file->is_selected = false;
+        g_file_manager_state->file_count++;
+    }
     
     while ((entry = readdir(dir)) != NULL) {
         // 跳过隐藏文件
@@ -234,14 +260,29 @@ static void scan_directory(const char* path) {
             continue;
         }
         
+        // 检查数组边界
+        if (g_file_manager_state->file_count >= file_count) {
+            printf("File count exceeded allocated space: %lu >= %lu\n", 
+                   (unsigned long)g_file_manager_state->file_count, (unsigned long)file_count);
+            break;
+        }
+        
         file_item_t* file = &g_file_manager_state->files[g_file_manager_state->file_count];
+        if (!file) {
+            printf("Invalid file item pointer at index %lu\n", (unsigned long)g_file_manager_state->file_count);
+            break;
+        }
         
         // 设置文件名
         strncpy(file->name, entry->d_name, sizeof(file->name) - 1);
         file->name[sizeof(file->name) - 1] = '\0';
         
         // 设置完整路径
-        snprintf(file->full_path, sizeof(file->full_path), "%s/%s", path, entry->d_name);
+        int full_path_len = snprintf(file->full_path, sizeof(file->full_path), "%s/%s", path, entry->d_name);
+        if (full_path_len >= sizeof(file->full_path)) {
+            printf("Full path too long: %s/%s\n", path, entry->d_name);
+            continue;
+        }
         
         // 设置文件类型
         if (entry->d_type == DT_DIR) {
@@ -274,6 +315,12 @@ static void scan_directory(const char* path) {
 // 创建文件列表UI
 static void create_file_list_ui(void) {
     if (!g_file_manager_state || !g_file_manager_state->file_list) {
+        printf("Invalid state for create_file_list_ui\n");
+        return;
+    }
+    
+    if (!g_file_manager_state->files) {
+        printf("No file list available for UI creation\n");
         return;
     }
     
@@ -288,7 +335,16 @@ static void create_file_list_ui(void) {
     
     // 创建文件项
     for (uint32_t i = 0; i < g_file_manager_state->file_count; i++) {
+        if (i >= g_file_manager_state->file_count) {
+            printf("File index out of bounds: %lu >= %lu\n", (unsigned long)i, (unsigned long)g_file_manager_state->file_count);
+            break;
+        }
+        
         file_item_t* file = &g_file_manager_state->files[i];
+        if (!file) {
+            printf("Invalid file item at index %lu\n", (unsigned long)i);
+            continue;
+        }
         
         // 创建文件项容器
         lv_obj_t* item_container = lv_obj_create(g_file_manager_state->file_list);
@@ -326,8 +382,10 @@ static void create_file_list_ui(void) {
         // 创建文件信息标签
         lv_obj_t* info_label = lv_label_create(item_container);
         char info_text[64];
-        if (file->type == FILE_TYPE_DIRECTORY) {
-            snprintf(info_text, sizeof(info_text), "Directory");
+        if (file->type == FILE_TYPE_PARENT) {
+            snprintf(info_text, sizeof(info_text), "返回上级");
+        } else if (file->type == FILE_TYPE_DIRECTORY) {
+            snprintf(info_text, sizeof(info_text), "目录");
         } else {
             format_file_size(file->size, info_text, sizeof(info_text));
         }
@@ -358,7 +416,7 @@ static void update_status_bar(void) {
     
     char status_text[128];
     snprintf(status_text, sizeof(status_text), 
-             "Files: %lu | Selected: %lu", 
+             "文件: %lu | 选中: %lu", 
              (unsigned long)g_file_manager_state->file_count,
              (unsigned long)g_file_manager_state->selected_count);
     
@@ -380,7 +438,7 @@ static void create_action_buttons(void) {
     lv_obj_set_flex_align(g_file_manager_state->action_buttons, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
     // 创建按钮
-    const char* button_texts[] = {"Copy", "Delete", "Rename", "New Folder"};
+    const char* button_texts[] = {"复制", "删除", "重命名", "新建文件夹"};
     const char* button_icons[] = {LV_SYMBOL_COPY, LV_SYMBOL_TRASH, LV_SYMBOL_EDIT, LV_SYMBOL_DIRECTORY};
     
     for (int i = 0; i < 4; i++) {
@@ -396,6 +454,7 @@ static void create_action_buttons(void) {
         lv_obj_t* label = lv_label_create(button);
         lv_label_set_text_fmt(label, "%s\n%s", button_icons[i], button_texts[i]);
         lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_text_font(label, &simhei_32, 0);
         lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
         
         // 添加点击事件
@@ -405,23 +464,77 @@ static void create_action_buttons(void) {
 
 // 文件项点击事件
 static void file_item_event_cb(lv_event_t* e) {
+    if (!e) {
+        printf("Invalid event in file_item_event_cb\n");
+        return;
+    }
+    
     file_item_t* file = (file_item_t*)lv_event_get_user_data(e);
     if (!file) {
+        printf("Invalid file data in file_item_event_cb\n");
+        return;
+    }
+    
+    if (!g_file_manager_state) {
+        printf("Invalid file manager state in file_item_event_cb\n");
         return;
     }
     
     printf("File clicked: %s\n", file->name);
     
-    if (file->type == FILE_TYPE_DIRECTORY) {
-        // 进入目录
-        strncpy(g_file_manager_state->current_path, file->full_path, sizeof(g_file_manager_state->current_path) - 1);
-        g_file_manager_state->current_path[sizeof(g_file_manager_state->current_path) - 1] = '\0';
+    if (file->type == FILE_TYPE_PARENT) {
+        // 返回上一级目录 - 使用安全的路径处理
+        char parent_path[512];
+        strncpy(parent_path, g_file_manager_state->current_path, sizeof(parent_path) - 1);
+        parent_path[sizeof(parent_path) - 1] = '\0';
         
-        // 重新扫描目录
-        scan_directory(g_file_manager_state->current_path);
-        create_file_list_ui();
-        update_path_display();
-        update_status_bar();
+        char* last_slash = strrchr(parent_path, '/');
+        if (last_slash && last_slash != parent_path) {
+            *last_slash = '\0';  // 截断路径
+            
+            // 验证父目录是否存在
+            DIR* test_dir = opendir(parent_path);
+            if (test_dir) {
+                closedir(test_dir);
+                
+                // 更新当前路径
+                strncpy(g_file_manager_state->current_path, parent_path, sizeof(g_file_manager_state->current_path) - 1);
+                g_file_manager_state->current_path[sizeof(g_file_manager_state->current_path) - 1] = '\0';
+                
+                scan_directory(g_file_manager_state->current_path);
+                create_file_list_ui();
+                update_path_display();
+                update_status_bar();
+            } else {
+                printf("Failed to access parent directory: %s\n", parent_path);
+            }
+        }
+    } else if (file->type == FILE_TYPE_DIRECTORY) {
+        // 进入目录 - 使用安全的路径构建
+        char new_path[512];
+        int path_len = snprintf(new_path, sizeof(new_path), "%s/%s", g_file_manager_state->current_path, file->name);
+        if (path_len >= sizeof(new_path)) {
+            printf("Path too long: %s/%s\n", g_file_manager_state->current_path, file->name);
+            return;
+        }
+        
+        // 验证目录是否存在
+        DIR* test_dir = opendir(new_path);
+        if (test_dir) {
+            closedir(test_dir);
+            
+            // 更新当前路径
+            strncpy(g_file_manager_state->current_path, new_path, sizeof(g_file_manager_state->current_path) - 1);
+            g_file_manager_state->current_path[sizeof(g_file_manager_state->current_path) - 1] = '\0';
+            
+            // 重新扫描目录
+            scan_directory(g_file_manager_state->current_path);
+            create_file_list_ui();
+            update_path_display();
+            update_status_bar();
+        } else {
+            printf("Failed to access directory: %s\n", new_path);
+        }
     } else {
         // 文件操作（这里可以添加文件预览等功能）
         printf("File selected: %s (size: %zu bytes)\n", file->name, file->size);
@@ -496,7 +609,7 @@ static void file_manager_create(app_t* app) {
     g_file_manager_state->status_bar = lv_label_create(g_file_manager_state->menu);
     lv_label_set_text(g_file_manager_state->status_bar, "文件: 0 | 选中: 0");
     lv_obj_set_style_text_color(g_file_manager_state->status_bar, lv_color_hex(0x666666), 0);
-    lv_obj_set_style_text_font(g_file_manager_state->status_bar, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(g_file_manager_state->status_bar, &simhei_32, 0);
     lv_obj_align_to(g_file_manager_state->status_bar, g_file_manager_state->path_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 8);
     
     // 创建文件列表容器
@@ -566,6 +679,6 @@ static void file_manager_destroy(app_t* app) {
 
 // 注册文件管理器App
 void register_file_manager_app(void) {
-    app_manager_register_app("File Manager", LV_SYMBOL_DIRECTORY, 
+    app_manager_register_app("文件管理器", LV_SYMBOL_DIRECTORY, 
                              file_manager_create, file_manager_destroy);
 } 
