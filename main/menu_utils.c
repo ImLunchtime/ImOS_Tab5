@@ -1,6 +1,9 @@
 #include "menu_utils.h"
 #include <lvgl.h>
 
+// 声明自定义字体
+LV_FONT_DECLARE(simhei_32);
+
 lv_obj_t * root_page;
 
 void menu_back_event_handler(lv_event_t * e)
@@ -54,6 +57,8 @@ lv_obj_t * menu_create_text(lv_obj_t * parent, const char * icon, const char * t
         lv_label_set_text(label, txt);
         lv_label_set_long_mode(label, LV_LABEL_LONG_SCROLL_CIRCULAR);
         lv_obj_set_flex_grow(label, 1);
+        // 设置中文字体
+        lv_obj_set_style_text_font(label, &simhei_32, 0);
     }
 
     if(builder_variant == LV_MENU_ITEM_BUILDER_VARIANT_2 && icon && txt) {

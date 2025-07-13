@@ -4,9 +4,12 @@
 #include <stdio.h>
 //#include "assets/bg.c"
 
+// 声明自定义字体
+LV_FONT_DECLARE(simhei_32);
 
 // 外部声明背景图片 - 来自assets/bg.c
 //extern const lv_image_dsc_t bg;
+//LV_FONT_DECLARE(simhei_32);
 
 // 启动器应用创建
 static void launcher_app_create(app_t* app) {
@@ -29,6 +32,23 @@ static void launcher_app_create(app_t* app) {
     // lv_obj_add_flag(bg_img, LV_OBJ_FLAG_EVENT_BUBBLE);
     // lv_obj_clear_flag(bg_img, LV_OBJ_FLAG_CLICKABLE);
 
+    // 创建欢迎文本标签
+    lv_obj_t* welcome_label = lv_label_create(app->container);
+    lv_label_set_text(welcome_label, "欢迎使用");
+    
+    // 设置自定义字体
+    lv_obj_set_style_text_font(welcome_label, &simhei_32, 0);
+    
+    // 设置文本颜色为白色
+    lv_obj_set_style_text_color(welcome_label, lv_color_black(), 0);
+    
+    // 居中显示
+    lv_obj_align(welcome_label, LV_ALIGN_CENTER, 0, 0);
+    
+    // 确保标签不会拦截事件
+    lv_obj_add_flag(welcome_label, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_clear_flag(welcome_label, LV_OBJ_FLAG_CLICKABLE);
+
     app_drawer_open();
 }
 
@@ -40,6 +60,6 @@ static void launcher_app_destroy(app_t* app) {
 
 // 注册启动器应用
 void register_launcher_app(void) {
-    app_manager_register_app("Launcher", LV_SYMBOL_HOME, 
+    app_manager_register_app("启动器", LV_SYMBOL_HOME, 
                              launcher_app_create, launcher_app_destroy);
 } 

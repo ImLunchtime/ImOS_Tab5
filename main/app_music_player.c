@@ -12,6 +12,9 @@
 #include <ctype.h>
 #include <math.h>
 
+// 声明自定义字体
+LV_FONT_DECLARE(simhei_32);
+
 // 高DPI屏幕尺寸 (1280x720)
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
@@ -227,9 +230,9 @@ static void file_list_event_cb(lv_event_t* e) {
             
             // 创建反馈提示
             lv_obj_t* feedback = lv_label_create(lv_screen_active());
-            lv_label_set_text_fmt(feedback, "Selected: %s", file->title);
+            lv_label_set_text_fmt(feedback, "已选择: %s", file->title);
             lv_obj_set_style_text_color(feedback, lv_color_hex(0x00AA00), 0);
-            lv_obj_set_style_text_font(feedback, &lv_font_montserrat_18, 0);
+            lv_obj_set_style_text_font(feedback, &simhei_32, 0);
             lv_obj_align(feedback, LV_ALIGN_TOP_MID, 0, 20);
             
             // 2秒后自动删除提示
@@ -283,17 +286,17 @@ static void refresh_file_list(lv_obj_t* list) {
     
     if (!g_music_data.sd_card_mounted) {
         // SD卡未挂载
-        lv_obj_t* item = lv_list_add_text(list, "SD Card not mounted");
+        lv_obj_t* item = lv_list_add_text(list, "SD卡未挂载");
         lv_obj_set_style_text_color(item, lv_color_hex(0xFF0000), 0);
-        lv_obj_set_style_text_font(item, &lv_font_montserrat_18, 0);
+        lv_obj_set_style_text_font(item, &simhei_32, 0);
         return;
     }
     
     if (g_music_data.file_count == 0) {
         // 没有找到MP3文件
-        lv_obj_t* item = lv_list_add_text(list, "No MP3 files found");
+        lv_obj_t* item = lv_list_add_text(list, "未找到MP3文件");
         lv_obj_set_style_text_color(item, lv_color_hex(0x888888), 0);
-        lv_obj_set_style_text_font(item, &lv_font_montserrat_18, 0);
+        lv_obj_set_style_text_font(item, &simhei_32, 0);
         return;
     }
     
@@ -330,7 +333,7 @@ static void music_player_app_create(app_t* app) {
     }
     
     // 设置红色背景
-    lv_obj_set_style_bg_color(app->container, lv_color_hex(0xBD4D4D), 0);
+    lv_obj_set_style_bg_color(app->container, lv_color_hex(0xFF4F4F), 0);
     lv_obj_set_style_bg_opa(app->container, LV_OPA_COVER, 0);
     
     // 获取屏幕尺寸
@@ -350,9 +353,9 @@ static void music_player_app_create(app_t* app) {
     
     // 侧栏标题
     lv_obj_t* sidebar_title = lv_label_create(sidebar_container);
-    lv_label_set_text(sidebar_title, "Playlist");
+    lv_label_set_text(sidebar_title, "播放列表");
     lv_obj_set_style_text_color(sidebar_title, lv_color_hex(0xFFFFFF), 0);  // 白色文字
-    lv_obj_set_style_text_font(sidebar_title, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(sidebar_title, &simhei_32, 0);
     lv_obj_align(sidebar_title, LV_ALIGN_TOP_LEFT, 20, 20);
     
     // 创建播放列表 (保持原有逻辑)
@@ -408,9 +411,9 @@ static void music_player_app_create(app_t* app) {
     
     // 当前歌曲标签
     g_current_song_label = lv_label_create(text_info_container);
-    lv_label_set_text(g_current_song_label, "No song selected");
+    lv_label_set_text(g_current_song_label, "未选择歌曲");
     lv_obj_set_style_text_color(g_current_song_label, lv_color_hex(0xFFFFFF), 0);  // 白色文字
-    lv_obj_set_style_text_font(g_current_song_label, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(g_current_song_label, &simhei_32, 0);
     lv_obj_align(g_current_song_label, LV_ALIGN_TOP_LEFT, 0, 10);
     lv_label_set_long_mode(g_current_song_label, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(g_current_song_label, main_width - 280);
@@ -685,8 +688,14 @@ void update_playback_ui(lv_obj_t* container, music_player_data_t* data) {
     }
     
     // 更新当前歌曲信息
-    if (g_current_song_label && data->files && data->current_index < data->file_count) {
-        lv_label_set_text(g_current_song_label, data->files[data->current_index].title);
+    if (g_current_song_label) {
+        if (data->files && data->current_index < data->file_count) {
+            lv_label_set_text(g_current_song_label, data->files[data->current_index].title);
+        } else {
+            lv_label_set_text(g_current_song_label, "未选择歌曲");
+        }
+        // 确保使用中文字体
+        lv_obj_set_style_text_font(g_current_song_label, &simhei_32, 0);
     }
     
     // 更新进度条
@@ -713,6 +722,6 @@ static void ui_update_timer_cb(lv_timer_t* timer) {
 
 // 注册音乐播放器应用
 void register_music_player_app(void) {
-    app_manager_register_app("Music Player", LV_SYMBOL_AUDIO, 
+    app_manager_register_app("音乐播放器", LV_SYMBOL_AUDIO, 
                              music_player_app_create, music_player_app_destroy);
 } 

@@ -9,6 +9,41 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+// 声明自定义字体
+LV_FONT_DECLARE(simhei_32);
+
+// 预定义的颜色数组，为应用图标提供不同的颜色
+static const uint32_t app_color_hex[] = {
+    0xFF6B6B,  // 红色
+    0x4ECDC4,  // 青色
+    0x45B7D1,  // 蓝色
+    0x96CEB4,  // 绿色
+    0xFFEAA7,  // 黄色
+    0xDDA0DD,  // 紫色
+    0xFFB347,  // 橙色
+    0x87CEEB,  // 天蓝色
+    0xFF69B4,  // 粉色
+    0x20B2AA,  // 海绿色
+    0x9370DB,  // 中紫色
+    0x32CD32,  // 酸橙绿
+};
+
+// 获取应用的颜色（基于应用名称的哈希值）
+static lv_color_t get_app_color(const char* app_name) {
+    if (!app_name) {
+        return lv_color_hex(app_color_hex[0]);
+    }
+    
+    // 简单的哈希算法
+    uint32_t hash = 0;
+    for (int i = 0; app_name[i] != '\0'; i++) {
+        hash = ((hash << 5) + hash) + app_name[i];
+    }
+    
+    uint32_t color_index = hash % (sizeof(app_color_hex) / sizeof(app_color_hex[0]));
+    return lv_color_hex(app_color_hex[color_index]);
+}
+
 // 抽屉状态
 typedef struct {
     lv_obj_t* drawer_container;
@@ -44,7 +79,7 @@ static void app_item_event_cb(lv_event_t* e) {
 }
 
 // 背景点击事件（关闭抽屉）
-static void background_event_cb(lv_event_t* e) {
+__attribute__((unused)) static void background_event_cb(lv_event_t* e) {
     printf("Background clicked - closing drawer\n");
     app_drawer_close();
 }
@@ -76,7 +111,7 @@ static void volume_slider_event_cb(lv_event_t* e) {
             hal_set_speaker_volume((uint8_t)value);
             
             // 更新标签显示
-            lv_label_set_text_fmt(state->volume_label, "Vol: %d%%", (int)value);
+            lv_label_set_text_fmt(state->volume_label, "音量: %d%%", (int)value);
             printf("Volume changed to: %d%%\n", (int)value);
         }
     }
@@ -94,73 +129,90 @@ static void brightness_slider_event_cb(lv_event_t* e) {
             hal_set_display_brightness((uint8_t)value);
             
             // 更新标签显示
-            lv_label_set_text_fmt(state->brightness_label, "Brightness: %d%%", (int)value);
+            lv_label_set_text_fmt(state->brightness_label, "亮度: %d%%", (int)value);
             printf("Brightness changed to: %d%%\n", (int)value);
         }
     }
 }
 
-// 创建应用项 - 类似设置页面的列表样式
+// 创建应用项 - 新的按钮样式设计
 static void create_app_item(lv_obj_t* parent, app_t* app) {
     if (!parent || !app) {
         return;
     }
     
-    // 创建应用项容器，类似设置页面的样式
-    lv_obj_t* item_container = lv_obj_create(parent);
-    lv_obj_set_size(item_container, LV_PCT(100), 60);  // 增加高度适配高分辨率
-    lv_obj_set_style_bg_color(item_container, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_bg_opa(item_container, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(item_container, 8, 0);  // 圆角
-    lv_obj_set_style_border_width(item_container, 1, 0);
-    lv_obj_set_style_border_color(item_container, lv_color_hex(0xE0E0E0), 0);
-    lv_obj_set_style_pad_all(item_container, 0, 0);
+    // 创建应用按钮容器
+    lv_obj_t* button_container = lv_obj_create(parent);
+    lv_obj_set_size(button_container, LV_PCT(100), 70);  // 增加高度适配高分辨率
     
-    // 按压效果
-    lv_obj_set_style_bg_color(item_container, lv_color_hex(0xF0F0F0), LV_STATE_PRESSED);
-    lv_obj_set_style_transform_scale(item_container, 980, LV_STATE_PRESSED);  // 轻微缩放效果
+    // 设置按钮样式：无背景、无边框、无阴影
+    lv_obj_set_style_bg_opa(button_container, LV_OPA_TRANSP, 0);  // 透明背景
+    lv_obj_set_style_border_width(button_container, 0, 0);  // 无边框
+    lv_obj_set_style_shadow_width(button_container, 0, 0);  // 无阴影
+    lv_obj_set_style_pad_all(button_container, 0, 0);
+    
+    // 按压效果：淡灰色背景
+    lv_obj_set_style_bg_color(button_container, lv_color_hex(0xDDDDDD), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(button_container, LV_OPA_COVER, LV_STATE_PRESSED);
+    lv_obj_set_style_radius(button_container, 8, LV_STATE_PRESSED);  // 按压时圆角
     
     // 让容器可以接收点击事件
-    lv_obj_add_flag(item_container, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_clear_flag(item_container, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(item_container, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_add_flag(button_container, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(button_container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(button_container, LV_OBJ_FLAG_EVENT_BUBBLE);
     
-    // 创建应用图标（如果有）
-    if (app->icon[0] != '\0') {  // 检查字符串是否为空
-        lv_obj_t* icon = lv_label_create(item_container);
-        lv_label_set_text(icon, app->icon);
-        lv_obj_set_style_text_color(icon, lv_color_hex(0x2196F3), 0);  // 蓝色图标
-        lv_obj_set_style_text_font(icon, &lv_font_montserrat_20, 0);  // 大图标字体
-        lv_obj_align(icon, LV_ALIGN_LEFT_MID, 16, 0);
-        lv_obj_set_style_pad_all(icon, 0, 0);
+    // 获取应用的颜色
+    lv_color_t app_color = get_app_color(app->name);
+    
+    // 计算颜色索引用于打印
+    uint32_t hash = 0;
+    for (int i = 0; app->name[i] != '\0'; i++) {
+        hash = ((hash << 5) + hash) + app->name[i];
     }
+    uint32_t color_index = hash % (sizeof(app_color_hex) / sizeof(app_color_hex[0]));
+    
+    // 创建图标容器（圆形背景）
+    lv_obj_t* icon_container = lv_obj_create(button_container);
+    lv_obj_set_size(icon_container, 50, 50);  // 50x50像素的圆形
+    lv_obj_align(icon_container, LV_ALIGN_LEFT_MID, 16, 0);
+    
+    // 设置圆形背景
+    lv_obj_set_style_radius(icon_container, 25, 0);  // 25像素半径，形成圆形
+    lv_obj_set_style_bg_color(icon_container, app_color, 0);  // 使用应用颜色
+    lv_obj_set_style_bg_opa(icon_container, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(icon_container, 0, 0);
+    lv_obj_set_style_pad_all(icon_container, 0, 0);
+    
+    // 创建应用图标
+    lv_obj_t* icon = lv_label_create(icon_container);
+    if (app->icon[0] != '\0') {
+        lv_label_set_text(icon, app->icon);
+    } else {
+        // 如果没有图标，使用应用名称的第一个字符
+        char first_char[2] = {app->name[0], '\0'};
+        lv_label_set_text(icon, first_char);
+    }
+    
+    // 设置图标样式：白色文字，居中显示
+    lv_obj_set_style_text_color(icon, lv_color_hex(0xFFFFFF), 0);  // 白色图标
+    lv_obj_set_style_text_font(icon, &simhei_32, 0);  // 大图标字体
+    lv_obj_align(icon, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_pad_all(icon, 0, 0);
     
     // 创建应用名称标签
-    lv_obj_t* name_label = lv_label_create(item_container);
+    lv_obj_t* name_label = lv_label_create(button_container);
     lv_label_set_text(name_label, app->name);
     lv_obj_set_style_text_color(name_label, lv_color_hex(0x333333), 0);  // 深色文字
-    lv_obj_set_style_text_font(name_label, &lv_font_montserrat_18, 0);  // 大字体适配高分辨率
+    lv_obj_set_style_text_font(name_label, &simhei_32, 0);  // 使用中文字体
     lv_obj_set_style_pad_all(name_label, 0, 0);
     
-    // 根据是否有图标调整文字位置
-    if (app->icon[0] != '\0') {  // 检查字符串是否为空
-        lv_obj_align(name_label, LV_ALIGN_LEFT_MID, 52, 0);  // 图标后面
-    } else {
-        lv_obj_align(name_label, LV_ALIGN_LEFT_MID, 16, 0);  // 左对齐
-    }
+    // 将文字放在图标右侧
+    lv_obj_align_to(name_label, icon_container, LV_ALIGN_OUT_RIGHT_MID, 16, 0);
     
-    // 创建右侧箭头指示器
-    lv_obj_t* arrow = lv_label_create(item_container);
-    lv_label_set_text(arrow, LV_SYMBOL_RIGHT);
-    lv_obj_set_style_text_color(arrow, lv_color_hex(0x999999), 0);  // 灰色箭头
-    lv_obj_set_style_text_font(arrow, &lv_font_montserrat_16, 0);
-    lv_obj_align(arrow, LV_ALIGN_RIGHT_MID, -16, 0);
-    lv_obj_set_style_pad_all(arrow, 0, 0);
+    // 添加点击事件到按钮容器
+    lv_obj_add_event_cb(button_container, app_item_event_cb, LV_EVENT_CLICKED, app);
     
-    // 添加点击事件到容器
-    lv_obj_add_event_cb(item_container, app_item_event_cb, LV_EVENT_CLICKED, app);
-    
-    printf("Created modern app item: %s\n", app->name);
+    printf("Created app button: %s with color 0x%06lX\n", app->name, app_color_hex[color_index]);
 }
 
 // 清理应用项内存（现在已经不需要清理字符串了）
@@ -265,9 +317,9 @@ static void drawer_overlay_create(app_t* app) {
     
     // 创建标题
     lv_obj_t* title = lv_label_create(state->drawer_container);
-    lv_label_set_text(title, "Apps");
+    lv_label_set_text(title, "应用");
     lv_obj_set_style_text_color(title, lv_color_hex(0x333333), 0);  // 深色文字适配浅色主题
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);  // 大字体适配高分辨率
+    lv_obj_set_style_text_font(title, &simhei_32, 0);  // 使用中文字体
     lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_LEFT, 0);  // 左对齐
     lv_obj_set_style_pad_all(title, 20, 0);  // 增加内边距
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
@@ -288,11 +340,11 @@ static void drawer_overlay_create(app_t* app) {
     lv_obj_set_layout(state->app_list, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(state->app_list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(state->app_list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_gap(state->app_list, 12, 0);  // 增加项目间距适配高分辨率
+    lv_obj_set_style_pad_gap(state->app_list, 16, 0);  // 增加项目间距适配新的按钮设计
     
     // 创建音量控制区域
     lv_obj_t* volume_container = lv_obj_create(state->drawer_container);
-    lv_obj_set_size(volume_container, LV_PCT(90), 60);  // 增加容器高度到60像素
+    lv_obj_set_size(volume_container, LV_PCT(90), 80);  // 增加容器高度到60像素
     lv_obj_align_to(volume_container, state->app_list, LV_ALIGN_OUT_BOTTOM_LEFT, 10, 15);  // 增加间距到15像素
     lv_obj_set_style_bg_opa(volume_container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(volume_container, 0, 0);
@@ -300,13 +352,14 @@ static void drawer_overlay_create(app_t* app) {
     
     // 音量标签
     state->volume_label = lv_label_create(volume_container);
-    lv_label_set_text_fmt(state->volume_label, "Vol: %d%%", hal_get_speaker_volume());
+    lv_label_set_text_fmt(state->volume_label, "音量: %d%%", hal_get_speaker_volume());
     lv_obj_set_style_text_color(state->volume_label, lv_color_hex(0xFF6600), 0);  // 橙色
+    lv_obj_set_style_text_font(state->volume_label, &simhei_32, 0);  // 使用中文字体
     lv_obj_align(state->volume_label, LV_ALIGN_TOP_LEFT, 0, 0);
     
     // 音量滑块
     state->volume_slider = lv_slider_create(volume_container);
-    lv_obj_set_size(state->volume_slider, LV_PCT(100), 22);  // 调整滑块高度到22像素
+    lv_obj_set_size(state->volume_slider, LV_PCT(100), 18);  // 调整滑块高度到22像素
     lv_obj_align_to(state->volume_slider, state->volume_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 8);  // 增加间距到8像素
     lv_slider_set_range(state->volume_slider, 0, 100);
     lv_slider_set_value(state->volume_slider, hal_get_speaker_volume(), LV_ANIM_OFF);
@@ -321,21 +374,22 @@ static void drawer_overlay_create(app_t* app) {
     
     // 创建亮度控制区域
     lv_obj_t* brightness_container = lv_obj_create(state->drawer_container);
-    lv_obj_set_size(brightness_container, LV_PCT(90), 60);  // 增加容器高度到60像素
+    lv_obj_set_size(brightness_container, LV_PCT(90), 80);  // 增加容器高度到60像素
     lv_obj_align_to(brightness_container, volume_container, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 15);  // 增加间距到15像素
     lv_obj_set_style_bg_opa(brightness_container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(brightness_container, 0, 0);
-    lv_obj_set_style_pad_all(brightness_container, 8, 0);  // 增加内边距到8像素
+    lv_obj_set_style_pad_all(brightness_container, 4, 0);  // 增加内边距到8像素
     
     // 亮度标签
     state->brightness_label = lv_label_create(brightness_container);
-    lv_label_set_text_fmt(state->brightness_label, "Brightness: %d%%", hal_get_display_brightness());
+    lv_label_set_text_fmt(state->brightness_label, "亮度: %d%%", hal_get_display_brightness());
     lv_obj_set_style_text_color(state->brightness_label, lv_color_hex(0x0066FF), 0);  // 蓝色
+    lv_obj_set_style_text_font(state->brightness_label, &simhei_32, 0);  // 使用中文字体
     lv_obj_align(state->brightness_label, LV_ALIGN_TOP_LEFT, 0, 0);
     
     // 亮度滑块
     state->brightness_slider = lv_slider_create(brightness_container);
-    lv_obj_set_size(state->brightness_slider, LV_PCT(100), 22);  // 调整滑块高度到22像素
+    lv_obj_set_size(state->brightness_slider, LV_PCT(100), 18);  // 调整滑块高度到22像素
     lv_obj_align_to(state->brightness_slider, state->brightness_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 8);  // 增加间距到8像素
     lv_slider_set_range(state->brightness_slider, 20, 100);  // 最低亮度20%
     lv_slider_set_value(state->brightness_slider, hal_get_display_brightness(), LV_ANIM_OFF);

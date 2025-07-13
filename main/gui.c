@@ -4,8 +4,12 @@
 #include "app_launcher.h"
 #include "app_settings.h"
 #include "app_music_player.h"
+#include "app_file_manager.h"
 #include "gesture_handler.h"
 #include "system_test.h"
+
+// 包含自定义字体（只包含一次）
+#include "assets/simhei_32.c"
 
 void gui_init(lv_disp_t *disp) 
 {
@@ -19,6 +23,7 @@ void gui_init(lv_disp_t *disp)
     register_launcher_app();
     register_settings_app();
     register_music_player_app();
+    register_file_manager_app();
     
     // 启动所有auto_start的Overlay
     overlay_t* overlay = app_manager_get_overlay_list();
