@@ -1,4 +1,5 @@
 #include "hal.h"
+#include "system_test.h"
 #include <stdio.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -51,6 +52,9 @@ void hal_init(void)
 
     g_hal_initialized = true;
     printf("HAL initialized successfully\n");
+    
+    // Run system tests
+    run_system_tests();
 }
 
 void hal_deinit(void)

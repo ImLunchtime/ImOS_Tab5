@@ -6,4 +6,6 @@ idf_component_register(SRCS "system_test.c" "menu_utils.c" "gesture_handler.c" "
                             "hal_sdcard.c"
                             "app_music_player.c"
                             "app_file_manager.c"
+                            "app_audio_loopback.c"
+                            "audio_loopback_test.c"
                     INCLUDE_DIRS ".")

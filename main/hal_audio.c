@@ -9,10 +9,22 @@
 #include <esp_err.h>
 #include <driver/i2c_master.h>
 
-// PI4IOE1寄存器定义
-#define PI4IO_REG_OUT_SET    0x0F
-#define PI4IO_REG_OUT_CLR    0x10
-#define PI4IO_REG_IN_STA     0x11
+// PI4IOE5V寄存器定义 (与参考代码保持一致)
+#define PI4IO_REG_CHIP_RESET 0x01
+#define PI4IO_REG_IO_DIR     0x03
+#define PI4IO_REG_OUT_SET    0x05
+#define PI4IO_REG_OUT_H_IM   0x07
+#define PI4IO_REG_IN_DEF_STA 0x09
+#define PI4IO_REG_PULL_EN    0x0B
+#define PI4IO_REG_PULL_SEL   0x0D
+#define PI4IO_REG_IN_STA     0x0F
+#define PI4IO_REG_INT_MASK   0x11
+#define PI4IO_REG_IRQ_STA    0x13
+
+// PI4IOE5V设备地址
+#define I2C_DEV_ADDR_PI4IOE1  0x43  // addr pin low
+#define I2C_DEV_ADDR_PI4IOE2  0x44  // addr pin high
+#define I2C_MASTER_TIMEOUT_MS 50
 
 // 扬声器使能引脚定义 (PI4IOE1 P1)
 #define SPEAKER_ENABLE_PIN   1
@@ -20,11 +32,16 @@
 // 全局I2C设备句柄
 static i2c_master_bus_handle_t g_i2c_bus_handle = NULL;
 static i2c_master_dev_handle_t g_pi4ioe1_handle = NULL;
+static i2c_master_dev_handle_t g_pi4ioe2_handle = NULL;
 
-// 初始化PI4IOE1设备
-static esp_err_t init_pi4ioe1(void)
+// 位操作宏定义
+#define setbit(x, y) x |= (0x01 << y)
+#define clrbit(x, y) x &= ~(0x01 << y)
+
+// 初始化PI4IOE5V设备
+static esp_err_t init_pi4ioe5v(void)
 {
-    if (g_pi4ioe1_handle != NULL) {
+    if (g_pi4ioe1_handle != NULL && g_pi4ioe2_handle != NULL) {
         return ESP_OK; // 已经初始化
     }
     
@@ -34,27 +51,95 @@ static esp_err_t init_pi4ioe1(void)
         return ESP_FAIL;
     }
     
-    // PI4IOE1设备地址
-    i2c_device_config_t dev_cfg = {
+    uint8_t write_buf[2] = {0};
+    uint8_t read_buf[1] = {0};
+    
+    // 初始化PI4IOE1 (地址0x43)
+    i2c_device_config_t dev_cfg1 = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-        .device_address = 0x43, // PI4IOE1地址 (addr pin low)
+        .device_address = I2C_DEV_ADDR_PI4IOE1,
         .scl_speed_hz = 400000,
     };
     
-    esp_err_t ret = i2c_master_bus_add_device(g_i2c_bus_handle, &dev_cfg, &g_pi4ioe1_handle);
+    esp_err_t ret = i2c_master_bus_add_device(g_i2c_bus_handle, &dev_cfg1, &g_pi4ioe1_handle);
     if (ret != ESP_OK) {
         printf("Failed to add PI4IOE1 device: %s\n", esp_err_to_name(ret));
         return ret;
     }
     
-    printf("PI4IOE1 initialized successfully\n");
+    // 配置PI4IOE1
+    write_buf[0] = PI4IO_REG_CHIP_RESET;
+    write_buf[1] = 0xFF;
+    i2c_master_transmit(g_pi4ioe1_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    write_buf[0] = PI4IO_REG_CHIP_RESET;
+    i2c_master_transmit_receive(g_pi4ioe1_handle, write_buf, 1, read_buf, 1, I2C_MASTER_TIMEOUT_MS);
+    write_buf[0] = PI4IO_REG_IO_DIR;
+    write_buf[1] = 0b01111111;  // 0: input 1: output
+    i2c_master_transmit(g_pi4ioe1_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    write_buf[0] = PI4IO_REG_OUT_H_IM;
+    write_buf[1] = 0b00000000;  // 使用到的引脚关闭 High-Impedance
+    i2c_master_transmit(g_pi4ioe1_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    write_buf[0] = PI4IO_REG_PULL_SEL;
+    write_buf[1] = 0b01111111;  // pull up/down select, 0 down, 1 up
+    i2c_master_transmit(g_pi4ioe1_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    write_buf[0] = PI4IO_REG_PULL_EN;
+    write_buf[1] = 0b01111111;  // P7 中断使能 0 enable, 1 disable
+    i2c_master_transmit(g_pi4ioe1_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    /* Output Port Register P1(SPK_EN), P2(EXT5V_EN), P4(LCD_RST), P5(TP_RST), P6(CAM)RST 输出高电平 */
+    write_buf[0] = PI4IO_REG_OUT_SET;
+    write_buf[1] = 0b01110110;
+    i2c_master_transmit(g_pi4ioe1_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    
+    // 初始化PI4IOE2 (地址0x44)
+    i2c_device_config_t dev_cfg2 = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = I2C_DEV_ADDR_PI4IOE2,
+        .scl_speed_hz = 400000,
+    };
+    
+    ret = i2c_master_bus_add_device(g_i2c_bus_handle, &dev_cfg2, &g_pi4ioe2_handle);
+    if (ret != ESP_OK) {
+        printf("Failed to add PI4IOE2 device: %s\n", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    // 配置PI4IOE2
+    write_buf[0] = PI4IO_REG_CHIP_RESET;
+    write_buf[1] = 0xFF;
+    i2c_master_transmit(g_pi4ioe2_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    write_buf[0] = PI4IO_REG_CHIP_RESET;
+    i2c_master_transmit_receive(g_pi4ioe2_handle, write_buf, 1, read_buf, 1, I2C_MASTER_TIMEOUT_MS);
+    write_buf[0] = PI4IO_REG_IO_DIR;
+    write_buf[1] = 0b10111001;  // 0: input 1: output
+    i2c_master_transmit(g_pi4ioe2_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    write_buf[0] = PI4IO_REG_OUT_H_IM;
+    write_buf[1] = 0b00000110;  // 使用到的引脚关闭 High-Impedance
+    i2c_master_transmit(g_pi4ioe2_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    write_buf[0] = PI4IO_REG_PULL_SEL;
+    write_buf[1] = 0b10111001;  // pull up/down select, 0 down, 1 up
+    i2c_master_transmit(g_pi4ioe2_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    write_buf[0] = PI4IO_REG_PULL_EN;
+    write_buf[1] = 0b11111001;  // pull up/down enable, 0 disable, 1 enable
+    i2c_master_transmit(g_pi4ioe2_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    write_buf[0] = PI4IO_REG_IN_DEF_STA;
+    write_buf[1] = 0b01000000;  // P6 默认高电平
+    i2c_master_transmit(g_pi4ioe2_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    write_buf[0] = PI4IO_REG_INT_MASK;
+    write_buf[1] = 0b10111111;  // P6 中断使能 0 enable, 1 disable
+    i2c_master_transmit(g_pi4ioe2_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    /* Output Port Register P0(WLAN_PWR_EN), P3(USB5V_EN), P7(CHG_EN) 输出高电平 */
+    write_buf[0] = PI4IO_REG_OUT_SET;
+    write_buf[1] = 0b00001001;
+    i2c_master_transmit(g_pi4ioe2_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
+    
+    printf("PI4IOE5V initialized successfully\n");
     return ESP_OK;
 }
 
 // 控制扬声器使能
 static esp_err_t bsp_set_speaker_enable(bool enable)
 {
-    esp_err_t ret = init_pi4ioe1();
+    esp_err_t ret = init_pi4ioe5v();
     if (ret != ESP_OK) {
         return ret;
     }
@@ -64,7 +149,7 @@ static esp_err_t bsp_set_speaker_enable(bool enable)
     
     // 读取当前输出状态
     write_buf[0] = PI4IO_REG_OUT_SET;
-    ret = i2c_master_transmit_receive(g_pi4ioe1_handle, write_buf, 1, read_buf, 1, pdMS_TO_TICKS(100));
+    ret = i2c_master_transmit_receive(g_pi4ioe1_handle, write_buf, 1, read_buf, 1, I2C_MASTER_TIMEOUT_MS);
     if (ret != ESP_OK) {
         printf("Failed to read PI4IOE1 output state: %s\n", esp_err_to_name(ret));
         return ret;
@@ -74,17 +159,17 @@ static esp_err_t bsp_set_speaker_enable(bool enable)
     uint8_t current_state = read_buf[0];
     if (enable) {
         // 设置P1位为高电平（扬声器开启）
-        current_state |= (1 << SPEAKER_ENABLE_PIN);
+        setbit(current_state, SPEAKER_ENABLE_PIN);
     } else {
         // 清除P1位为低电平（扬声器关闭）
-        current_state &= ~(1 << SPEAKER_ENABLE_PIN);
+        clrbit(current_state, SPEAKER_ENABLE_PIN);
     }
     
     // 写入新的输出状态
     write_buf[0] = PI4IO_REG_OUT_SET;
     write_buf[1] = current_state;
     
-    ret = i2c_master_transmit(g_pi4ioe1_handle, write_buf, 2, pdMS_TO_TICKS(100));
+    ret = i2c_master_transmit(g_pi4ioe1_handle, write_buf, 2, I2C_MASTER_TIMEOUT_MS);
     if (ret != ESP_OK) {
         printf("Failed to set speaker enable: %s\n", esp_err_to_name(ret));
         return ret;
@@ -153,6 +238,13 @@ void hal_audio_init(void)
     g_audio_state.audio_mutex = xSemaphoreCreateMutex();
     if (g_audio_state.audio_mutex == NULL) {
         printf("Failed to create audio mutex\n");
+        return;
+    }
+
+    // Initialize PI4IOE5V first
+    esp_err_t ret = init_pi4ioe5v();
+    if (ret != ESP_OK) {
+        printf("Failed to initialize PI4IOE5V: %s\n", esp_err_to_name(ret));
         return;
     }
 
@@ -711,7 +803,7 @@ bool hal_get_speaker_enable(void)
         uint8_t write_buf[1] = {PI4IO_REG_OUT_SET};
         uint8_t read_buf[1] = {0};
         
-        esp_err_t ret = i2c_master_transmit_receive(g_pi4ioe1_handle, write_buf, 1, read_buf, 1, pdMS_TO_TICKS(100));
+        esp_err_t ret = i2c_master_transmit_receive(g_pi4ioe1_handle, write_buf, 1, read_buf, 1, I2C_MASTER_TIMEOUT_MS);
         if (ret == ESP_OK) {
             bool hardware_enabled = (read_buf[0] & (1 << SPEAKER_ENABLE_PIN)) != 0;
             // 同步软件状态与硬件状态
