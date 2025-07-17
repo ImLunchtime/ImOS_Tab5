@@ -48,7 +48,7 @@ static void safe_pwm_free(void* ptr) {
 
 // 注册PWM舵机应用
 void register_pwm_servo_app(void) {
-    app_manager_register_app("PWM舵机", LV_SYMBOL_SETTINGS, 
+    app_manager_register_app("PWM调试", LV_SYMBOL_SETTINGS, 
                              pwm_servo_app_create, pwm_servo_app_destroy);
 }
 

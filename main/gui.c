@@ -5,10 +5,9 @@
 #include "app_settings.h"
 #include "app_music_player.h"
 #include "app_file_manager.h"
-#include "app_audio_loopback.h"
 #include "app_pwm_servo.h"
 #include "gesture_handler.h"
-#include "system_test.h"
+#include "app_test.h"
 
 // 包含自定义字体（只包含一次）
 #include "assets/simhei_32.c"
@@ -27,6 +26,7 @@ void gui_init(lv_disp_t *disp)
     register_music_player_app();
     register_file_manager_app();
     register_pwm_servo_app();
+    register_test_app();
     //register_audio_loopback_app(); removed due to bugs
     
     // 启动所有auto_start的Overlay
@@ -45,7 +45,7 @@ void gui_init(lv_disp_t *disp)
     app_manager_go_to_launcher();
     
     // 运行系统测试（可选，调试时使用）
-    #ifdef DEBUG_SYSTEM_TESTS
-    run_system_tests();
-    #endif
+    // #ifdef DEBUG_SYSTEM_TESTS
+    // run_system_tests();
+    // #endif
 } 

@@ -690,13 +690,13 @@ overlay_t* app_manager_get_overlay_list(void) {
 
 // 跳转到启动器
 void app_manager_go_to_launcher(void) {
-    app_manager_launch_app("Launcher");
+    app_manager_launch_app("启动器");
 }
 
 // 检查是否是启动器激活状态
 bool app_manager_is_launcher_active(void) {
     return g_app_manager.current_app && 
-           strcmp(g_app_manager.current_app->name, "Launcher") == 0;
+           strcmp(g_app_manager.current_app->name, "启动器") == 0;
 }
 
 // 公共API：强制垃圾回收

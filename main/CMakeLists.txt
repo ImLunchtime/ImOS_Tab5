@@ -1,4 +1,4 @@
-idf_component_register(SRCS "app_pwm_servo.c" "hal_pwm.c" "system_test.c" "menu_utils.c" "gesture_handler.c" "app_settings.c" "app_launcher.c" "overlay_drawer.c" "app_manager.c" "m5stack-tab5-lvgl.c"
+idf_component_register(SRCS "app_test.c" "app_pwm_servo.c" "hal_pwm.c" "menu_utils.c" "gesture_handler.c" "app_settings.c" "app_launcher.c" "overlay_drawer.c" "app_manager.c" "m5stack-tab5-lvgl.c"
                             "gui.c"
                             "hal.c"
                             "hal_audio.c"
@@ -6,6 +6,4 @@ idf_component_register(SRCS "app_pwm_servo.c" "hal_pwm.c" "system_test.c" "menu_
                             "hal_sdcard.c"
                             "app_music_player.c"
                             "app_file_manager.c"
-                            "app_audio_loopback.c"
-                            "audio_loopback_test.c"
                     INCLUDE_DIRS ".")

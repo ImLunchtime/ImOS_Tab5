@@ -360,7 +360,14 @@ static void drawer_overlay_create(app_t* app) {
     
     // 确保列表容器不阻挡事件传播
     lv_obj_clear_flag(state->app_list, LV_OBJ_FLAG_EVENT_BUBBLE);
-    lv_obj_clear_flag(state->app_list, LV_OBJ_FLAG_SCROLLABLE);  // 禁用滚动避免事件冲突
+    // 启用滚动功能
+    lv_obj_add_flag(state->app_list, LV_OBJ_FLAG_SCROLLABLE);
+    // 设置滚动方向仅为垂直方向
+    lv_obj_set_scroll_dir(state->app_list, LV_DIR_VER);
+    // 设置滚动条样式
+    lv_obj_set_style_bg_opa(state->app_list, LV_OPA_10, LV_PART_SCROLLBAR);
+    lv_obj_set_style_width(state->app_list, 8, LV_PART_SCROLLBAR);
+    lv_obj_set_style_radius(state->app_list, 4, LV_PART_SCROLLBAR);
     
     // 设置列表布局
     lv_obj_set_layout(state->app_list, LV_LAYOUT_FLEX);
@@ -727,4 +734,4 @@ void app_drawer_check_cleanup(void) {
         printf("Idle cleanup triggered for app drawer\n");
         deep_clean_drawer(state);
     }
-} 
+}
