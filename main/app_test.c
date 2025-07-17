@@ -94,20 +94,20 @@ static void test_app_create(app_t* app) {
     lv_obj_t* arc = lv_arc_create(app->container);
     lv_obj_set_size(arc, 360, 360);
     lv_arc_set_rotation(arc, 0);
-    lv_arc_set_bg_angles(arc, 0, 360);
+    lv_arc_set_bg_angles(arc, 135, 45);
     lv_arc_set_value(arc, 0);
     lv_arc_set_range(arc, 0, 99);
     
     // 设置背景弧形样式
-    lv_obj_set_style_arc_color(arc, lv_color_hex(0x2196F3), LV_PART_MAIN);
+    lv_obj_set_style_arc_color(arc, lv_color_hex(0x000000), LV_PART_MAIN);
     lv_obj_set_style_arc_width(arc, 20, LV_PART_MAIN);
     
     // 设置前景弧形样式，使用渐变效果
-    lv_obj_set_style_arc_color(arc, lv_color_hex(0x64B5F6), LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(arc, lv_color_hex(0x2196F3), LV_PART_INDICATOR);
     lv_obj_set_style_arc_width(arc, 20, LV_PART_INDICATOR);
-    // 使用背景渐变来模拟3D效果
-    lv_obj_set_style_bg_grad_color(arc, lv_color_hex(0x1976D2), LV_PART_INDICATOR);
-    lv_obj_set_style_bg_grad_dir(arc, LV_GRAD_DIR_VER, LV_PART_INDICATOR);
+    // // 使用背景渐变来模拟3D效果
+    // lv_obj_set_style_bg_grad_color(arc, lv_color_hex(0x1976D2), LV_PART_INDICATOR);
+    // lv_obj_set_style_bg_grad_dir(arc, LV_GRAD_DIR_VER, LV_PART_INDICATOR);
     
     // 居中显示
     lv_obj_align(arc, LV_ALIGN_CENTER, 0, 0);
@@ -115,8 +115,8 @@ static void test_app_create(app_t* app) {
     // 添加新的灰色圆，位于黑色圆外面，Arc控件里面
     lv_obj_t* middle_circle = lv_obj_create(app->container);
     // 设置大小为260x260，刚好能触碰到Arc控件的内边（Arc宽度为360，弧宽为20，所以内径为320）
-    lv_obj_set_size(middle_circle, 260, 260);
-    lv_obj_set_style_radius(middle_circle, 130, 0); // 半径为宽度的一半
+    lv_obj_set_size(middle_circle, 310, 310);
+    lv_obj_set_style_radius(middle_circle, 150, 0); // 半径为宽度的一半
     
     // 设置渐变背景色，上亮下暗
     lv_obj_set_style_bg_color(middle_circle, lv_color_hex(0x707070), 0); // 亮灰色
@@ -130,11 +130,11 @@ static void test_app_create(app_t* app) {
     
     // 添加模糊的黑色阴影
     lv_obj_set_style_shadow_color(middle_circle, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_shadow_width(middle_circle, 15, 0); // 阴影宽度
-    lv_obj_set_style_shadow_opa(middle_circle, LV_OPA_30, 0); // 阴影透明度30%，不要太深
+    lv_obj_set_style_shadow_width(middle_circle, 30, 0); // 阴影宽度
+    lv_obj_set_style_shadow_opa(middle_circle, LV_OPA_60, 0); // 阴影透明度60%，不要太深
     lv_obj_set_style_shadow_spread(middle_circle, 0, 0); // 阴影扩散
     lv_obj_set_style_shadow_ofs_x(middle_circle, 0, 0); // 阴影X偏移
-    lv_obj_set_style_shadow_ofs_y(middle_circle, 5, 0); // 阴影Y偏移，稍微向下
+    lv_obj_set_style_shadow_ofs_y(middle_circle, 0, 0); // 阴影Y偏移
     
     // 居中显示
     lv_obj_align(middle_circle, LV_ALIGN_CENTER, 0, 0);
