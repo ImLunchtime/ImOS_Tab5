@@ -6,6 +6,7 @@
 #include "app_music_player.h"
 #include "app_file_manager.h"
 #include "app_audio_loopback.h"
+#include "app_pwm_servo.h"
 #include "gesture_handler.h"
 #include "system_test.h"
 
@@ -25,7 +26,8 @@ void gui_init(lv_disp_t *disp)
     register_settings_app();
     register_music_player_app();
     register_file_manager_app();
-    register_audio_loopback_app();
+    register_pwm_servo_app();
+    //register_audio_loopback_app(); removed due to bugs
     
     // 启动所有auto_start的Overlay
     overlay_t* overlay = app_manager_get_overlay_list();
