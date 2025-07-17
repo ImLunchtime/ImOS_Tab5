@@ -8,7 +8,7 @@ void app_main(void) {
     hal_init();
     
     // Initialize touchpad
-    hal_touchpad_init();
+    // hal_touchpad_init();
 
     // Initialize our GUI
     gui_init(lvDisp);
