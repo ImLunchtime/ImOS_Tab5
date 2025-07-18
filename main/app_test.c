@@ -129,12 +129,12 @@ static void test_app_create(app_t* app) {
     lv_obj_set_style_border_width(middle_circle, 2, 0);
     
     // 添加模糊的黑色阴影
-    lv_obj_set_style_shadow_color(middle_circle, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_shadow_width(middle_circle, 30, 0); // 阴影宽度
-    lv_obj_set_style_shadow_opa(middle_circle, LV_OPA_60, 0); // 阴影透明度60%，不要太深
-    lv_obj_set_style_shadow_spread(middle_circle, 0, 0); // 阴影扩散
-    lv_obj_set_style_shadow_ofs_x(middle_circle, 0, 0); // 阴影X偏移
-    lv_obj_set_style_shadow_ofs_y(middle_circle, 0, 0); // 阴影Y偏移
+    // lv_obj_set_style_shadow_color(middle_circle, lv_color_hex(0x000000), 0);
+    // lv_obj_set_style_shadow_width(middle_circle, 30, 0); // 阴影宽度
+    // lv_obj_set_style_shadow_opa(middle_circle, LV_OPA_60, 0); // 阴影透明度60%，不要太深
+    // lv_obj_set_style_shadow_spread(middle_circle, 0, 0); // 阴影扩散
+    // lv_obj_set_style_shadow_ofs_x(middle_circle, 0, 0); // 阴影X偏移
+    // lv_obj_set_style_shadow_ofs_y(middle_circle, 0, 0); // 阴影Y偏移
     
     // 居中显示
     lv_obj_align(middle_circle, LV_ALIGN_CENTER, 0, 0);
