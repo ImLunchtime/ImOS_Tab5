@@ -1,6 +1,7 @@
 #include "app_settings.h"
 #include "app_manager.h"
 #include "menu_utils.h"
+#include "hal.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -26,6 +27,7 @@ typedef struct {
     bool is_created;
     bool is_active;
     settings_page_type_t type;
+    lv_obj_t* sidebar_item; // 添加侧边栏项引用
 } settings_page_t;
 
 // 设置应用状态
@@ -47,6 +49,10 @@ static void page_event_handler(lv_event_t* e);
 static lv_obj_t* create_about_page(lv_obj_t* menu);
 static lv_obj_t* create_display_page(lv_obj_t* menu);
 static lv_obj_t* create_sound_page(lv_obj_t* menu);
+static void update_sidebar_highlight(settings_page_type_t active_page);
+static void brightness_slider_event_cb(lv_event_t* e);
+static void volume_slider_event_cb(lv_event_t* e);
+static void speaker_switch_event_cb(lv_event_t* e);
 
 // 安全的内存分配函数
 static void* safe_malloc(size_t size) {
@@ -79,30 +85,168 @@ static void safe_free(void* ptr) {
     }
 }
 
-// About页面创建函数
+// 亮度滑块事件回调
+static void brightness_slider_event_cb(lv_event_t* e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t* slider = lv_event_get_target(e);
+    
+    if (code == LV_EVENT_VALUE_CHANGED) {
+        int32_t value = lv_slider_get_value(slider);
+        hal_set_display_brightness((uint8_t)value);
+        
+        // 更新标签显示
+        lv_obj_t* label = lv_event_get_user_data(e);
+        if (label) {
+            lv_label_set_text_fmt(label, "亮度: %d%%", (int)value);
+        }
+        printf("Brightness changed to: %d%%\n", (int)value);
+    }
+}
+
+// 音量滑块事件回调
+static void volume_slider_event_cb(lv_event_t* e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t* slider = lv_event_get_target(e);
+    
+    if (code == LV_EVENT_VALUE_CHANGED) {
+        int32_t value = lv_slider_get_value(slider);
+        hal_set_speaker_volume((uint8_t)value);
+        
+        // 更新标签显示
+        lv_obj_t* label = lv_event_get_user_data(e);
+        if (label) {
+            lv_label_set_text_fmt(label, "音量: %d%%", (int)value);
+        }
+        printf("Volume changed to: %d%%\n", (int)value);
+    }
+}
+
+// 扬声器开关事件回调
+static void speaker_switch_event_cb(lv_event_t* e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t* switch_obj = lv_event_get_target(e);
+    
+    if (code == LV_EVENT_VALUE_CHANGED) {
+        // 获取开关的当前状态
+        bool enabled = lv_obj_has_state(switch_obj, LV_STATE_CHECKED);
+        
+        // 调用HAL函数设置扬声器状态
+        hal_set_speaker_enable(enabled);
+        
+        printf("Speaker %s\n", enabled ? "enabled" : "disabled");
+    }
+}
+
+// 更新侧边栏高亮
+static void update_sidebar_highlight(settings_page_type_t active_page) {
+    if (!g_settings_state) return;
+    
+    // 遍历所有页面，更新侧边栏项的样式
+    for (int i = 0; i < PAGE_TYPE_COUNT; i++) {
+        if (g_settings_state->pages[i].sidebar_item) {
+            if (i == active_page) {
+                // 高亮当前选中的项（蓝色）
+                lv_obj_set_style_bg_color(g_settings_state->pages[i].sidebar_item, lv_color_hex(0x0078D7), 0);
+                lv_obj_set_style_bg_opa(g_settings_state->pages[i].sidebar_item, LV_OPA_COVER, 0);
+                lv_obj_set_style_text_color(g_settings_state->pages[i].sidebar_item, lv_color_hex(0xFFFFFF), 0);
+            } else {
+                // 恢复其他项的默认样式
+                lv_obj_set_style_bg_opa(g_settings_state->pages[i].sidebar_item, LV_OPA_TRANSP, 0);
+                lv_obj_set_style_text_color(g_settings_state->pages[i].sidebar_item, lv_color_hex(0x333333), 0);
+            }
+        }
+    }
+}
+
+// About页面创建函数 - 重新设计
 static lv_obj_t* create_about_page(lv_obj_t* menu) {
     printf("Creating About page\n");
     
     lv_obj_t* page = lv_menu_page_create(menu, "关于本机");
     lv_obj_set_style_pad_hor(page, lv_obj_get_style_pad_left(lv_menu_get_main_header(menu), 0), 0);
     lv_menu_separator_create(page);
-    lv_obj_t* section = lv_menu_section_create(page);
     
-    // 设备信息
-    menu_create_text(section, LV_SYMBOL_SETTINGS, "设备: M5Tab5", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    menu_create_text(section, LV_SYMBOL_SETTINGS, "芯片: ESP32P4", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    menu_create_text(section, LV_SYMBOL_SETTINGS, "内存: 512KB", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    menu_create_text(section, LV_SYMBOL_SETTINGS, "PSRAM: 32MB", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    menu_create_text(section, LV_SYMBOL_SETTINGS, "闪存: 16MB", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    menu_create_text(section, LV_SYMBOL_SETTINGS, "ImOS beta0.1", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    menu_create_text(section, LV_SYMBOL_SETTINGS, "KiwiOS Framework: V3", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    // 创建上半部分容器
+    lv_obj_t* top_section = lv_obj_create(page);
+    lv_obj_set_size(top_section, LV_PCT(100), 200);
+    lv_obj_set_style_pad_all(top_section, 10, 0);
+    lv_obj_set_style_bg_opa(top_section, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(top_section, 0, 0);
+    lv_obj_set_flex_flow(top_section, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(top_section, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    
+    // 创建左侧设备信息卡片（蓝色渐变）
+    lv_obj_t* device_card = lv_obj_create(top_section);
+    lv_obj_set_size(device_card, LV_PCT(48), 180);
+    lv_obj_set_style_radius(device_card, 10, 0);
+    lv_obj_set_style_bg_color(device_card, lv_color_hex(0x0078D7), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_grad_color(device_card, lv_color_hex(0x00BFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_grad_dir(device_card, LV_GRAD_DIR_VER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_color(device_card, lv_color_hex(0x9370DB), 0);
+    lv_obj_set_style_border_width(device_card, 2, 0);
+    lv_obj_set_style_shadow_color(device_card, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_shadow_width(device_card, 15, 0);
+    lv_obj_set_style_shadow_ofs_x(device_card, 5, 0);
+    lv_obj_set_style_shadow_ofs_y(device_card, 5, 0);
+    lv_obj_set_style_shadow_opa(device_card, LV_OPA_30, 0);
+    
+    // 设备信息标题
+    lv_obj_t* device_title = lv_label_create(device_card);
+    lv_label_set_text(device_title, "设备信息");
+    lv_obj_set_style_text_font(device_title, &simhei_32, 0);
+    lv_obj_set_style_text_color(device_title, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_align(device_title, LV_ALIGN_TOP_MID, 0, 10);
+    
+    // 设备信息内容
+    lv_obj_t* device_info = lv_label_create(device_card);
+    lv_label_set_text(device_info, "设备: M5Tab5\n芯片: ESP32P4\n内存: 512KB\nPSRAM: 32MB\n闪存: 16MB");
+    lv_obj_set_style_text_font(device_info, &simhei_32, 0);
+    lv_obj_set_style_text_color(device_info, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_align(device_info, LV_ALIGN_TOP_LEFT, 15, 50);
+    
+    // 创建右侧系统信息卡片（红色渐变）
+    lv_obj_t* system_card = lv_obj_create(top_section);
+    lv_obj_set_size(system_card, LV_PCT(48), 180);
+    lv_obj_set_style_radius(system_card, 10, 0);
+    lv_obj_set_style_bg_color(system_card, lv_color_hex(0xFF4500), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_grad_color(system_card, lv_color_hex(0xFF6347), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_grad_dir(system_card, LV_GRAD_DIR_VER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_color(system_card, lv_color_hex(0x9370DB), 0);
+    lv_obj_set_style_border_width(system_card, 2, 0);
+    lv_obj_set_style_shadow_color(system_card, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_shadow_width(system_card, 15, 0);
+    lv_obj_set_style_shadow_ofs_x(system_card, 5, 0);
+    lv_obj_set_style_shadow_ofs_y(system_card, 5, 0);
+    lv_obj_set_style_shadow_opa(system_card, LV_OPA_30, 0);
+    
+    // 系统信息标题
+    lv_obj_t* system_title = lv_label_create(system_card);
+    lv_label_set_text(system_title, "系统信息");
+    lv_obj_set_style_text_font(system_title, &simhei_32, 0);
+    lv_obj_set_style_text_color(system_title, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_align(system_title, LV_ALIGN_TOP_MID, 0, 10);
+    
+    // 系统信息内容
+    lv_obj_t* system_info = lv_label_create(system_card);
+    lv_label_set_text(system_info, "ImOS beta0.1\nbuild 239\n\nKiwiOS Framework: V3\n\n");
+    lv_obj_set_style_text_font(system_info, &simhei_32, 0);
+    lv_obj_set_style_text_color(system_info, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_align(system_info, LV_ALIGN_TOP_LEFT, 15, 50);
+    
+    // 创建下半部分列表
+    lv_obj_t* bottom_section = lv_menu_section_create(page);
+    
+    // 芯片详细信息
+    menu_create_text(bottom_section, LV_SYMBOL_SETTINGS, "芯片型号: ESP32-P4", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(bottom_section, LV_SYMBOL_SETTINGS, "CPU: 单核 P4 @ 400MHz", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(bottom_section, LV_SYMBOL_SETTINGS, "系统版本: 0.1 build 239", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(bottom_section, LV_SYMBOL_SETTINGS, "LVGL版本: 9.2.2", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    menu_create_text(bottom_section, LV_SYMBOL_SETTINGS, "ESP-IDF版本: v5.4.1", LV_MENU_ITEM_BUILDER_VARIANT_1);
     
     return page;
 }
 
-
-
-// Display页面创建函数
+// Display页面创建函数 - 添加实际功能
 static lv_obj_t* create_display_page(lv_obj_t* menu) {
     printf("Creating Display page\n");
     
@@ -111,13 +255,44 @@ static lv_obj_t* create_display_page(lv_obj_t* menu) {
     lv_menu_separator_create(page);
     lv_obj_t* section = lv_menu_section_create(page);
     
-    // 亮度滑块
-    menu_create_slider(section, LV_SYMBOL_EYE_OPEN, "亮度", 0, 100, 80);
+    // 创建亮度标签
+    lv_obj_t* brightness_label = lv_label_create(section);
+    lv_label_set_text_fmt(brightness_label, "亮度: %d%%", hal_get_display_brightness());
+    lv_obj_set_style_text_font(brightness_label, &simhei_32, 0);
+    lv_obj_set_style_pad_all(brightness_label, 10, 0);
+    
+    // 创建亮度滑块容器
+    lv_obj_t* slider_cont = lv_obj_create(section);
+    lv_obj_set_size(slider_cont, LV_PCT(100), 60);
+    lv_obj_set_style_pad_all(slider_cont, 10, 0);
+    lv_obj_set_style_bg_opa(slider_cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(slider_cont, 0, 0);
+    
+    // 创建亮度滑块
+    lv_obj_t* brightness_slider = lv_slider_create(slider_cont);
+    lv_obj_set_size(brightness_slider, LV_PCT(100), 20);
+    lv_slider_set_range(brightness_slider, 20, 100);  // 最低亮度20%
+    lv_slider_set_value(brightness_slider, hal_get_display_brightness(), LV_ANIM_OFF);
+    
+    // 设置亮度滑块样式 (蓝色主题)
+    lv_obj_set_style_bg_color(brightness_slider, lv_color_hex(0x6699FF), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(brightness_slider, lv_color_hex(0x0066FF), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(brightness_slider, lv_color_hex(0x0044CC), LV_PART_KNOB);
+    
+    // 添加亮度滑块事件
+    lv_obj_add_event_cb(brightness_slider, brightness_slider_event_cb, LV_EVENT_VALUE_CHANGED, brightness_label);
+    
+    // 添加说明文本
+    lv_obj_t* note = lv_label_create(section);
+    lv_label_set_text(note, "亮度设置将同步到控制中心");
+    lv_obj_set_style_text_font(note, &simhei_32, 0);
+    lv_obj_set_style_text_color(note, lv_color_hex(0x888888), 0);
+    lv_obj_set_style_pad_all(note, 10, 0);
     
     return page;
 }
 
-// Sound页面创建函数
+// Sound页面创建函数 - 添加实际功能
 static lv_obj_t* create_sound_page(lv_obj_t* menu) {
     printf("Creating Sound page\n");
     
@@ -126,19 +301,80 @@ static lv_obj_t* create_sound_page(lv_obj_t* menu) {
     lv_menu_separator_create(page);
     lv_obj_t* section = lv_menu_section_create(page);
     
-    // 音量设置
-    menu_create_slider(section, LV_SYMBOL_VOLUME_MAX, "音量", 0, 100, 50);
-    menu_create_switch(section, LV_SYMBOL_MUTE, "静音", false);
+    // 创建音量标签
+    lv_obj_t* volume_label = lv_label_create(section);
+    lv_label_set_text_fmt(volume_label, "音量: %d%%", hal_get_speaker_volume());
+    lv_obj_set_style_text_font(volume_label, &simhei_32, 0);
+    lv_obj_set_style_pad_all(volume_label, 10, 0);
+    
+    // 创建音量滑块容器
+    lv_obj_t* slider_cont = lv_obj_create(section);
+    lv_obj_set_size(slider_cont, LV_PCT(100), 60);
+    lv_obj_set_style_pad_all(slider_cont, 10, 0);
+    lv_obj_set_style_bg_opa(slider_cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(slider_cont, 0, 0);
+    
+    // 创建音量滑块
+    lv_obj_t* volume_slider = lv_slider_create(slider_cont);
+    lv_obj_set_size(volume_slider, LV_PCT(100), 20);
+    lv_slider_set_range(volume_slider, 0, 100);
+    lv_slider_set_value(volume_slider, hal_get_speaker_volume(), LV_ANIM_OFF);
+    
+    // 设置音量滑块样式 (橙色主题)
+    lv_obj_set_style_bg_color(volume_slider, lv_color_hex(0xFF9966), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(volume_slider, lv_color_hex(0xFF6600), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(volume_slider, lv_color_hex(0xFF4400), LV_PART_KNOB);
+    
+    // 添加音量滑块事件
+    lv_obj_add_event_cb(volume_slider, volume_slider_event_cb, LV_EVENT_VALUE_CHANGED, volume_label);
+    
+    // 创建静音开关容器
+    lv_obj_t* switch_cont = lv_obj_create(section);
+    lv_obj_set_size(switch_cont, LV_PCT(100), 60);
+    lv_obj_set_style_pad_all(switch_cont, 10, 0);
+    lv_obj_set_style_bg_opa(switch_cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(switch_cont, 0, 0);
+    lv_obj_set_flex_flow(switch_cont, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(switch_cont, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    
+    // 创建静音标签
+    lv_obj_t* mute_label = lv_label_create(switch_cont);
+    lv_label_set_text(mute_label, "静音");
+    lv_obj_set_style_text_font(mute_label, &simhei_32, 0);
+    
+    // 创建静音开关
+    lv_obj_t* speaker_switch = lv_switch_create(switch_cont);
+    lv_obj_set_style_pad_left(speaker_switch, 20, 0);
+    
+    // 设置开关状态
+    bool speaker_enabled = hal_get_speaker_enable();
+    if (!speaker_enabled) {
+        lv_obj_add_state(speaker_switch, LV_STATE_CHECKED);
+    }
+    
+    // 设置开关样式 (绿色主题)
+    lv_obj_set_style_bg_color(speaker_switch, lv_color_hex(0xCCCCCC), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(speaker_switch, lv_color_hex(0x00AA00), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(speaker_switch, lv_color_hex(0xFFFFFF), LV_PART_KNOB);
+    
+    // 添加扬声器开关事件
+    lv_obj_add_event_cb(speaker_switch, speaker_switch_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    
+    // 添加说明文本
+    lv_obj_t* note = lv_label_create(section);
+    lv_label_set_text(note, "声音设置将同步到控制中心");
+    lv_obj_set_style_text_font(note, &simhei_32, 0);
+    lv_obj_set_style_text_color(note, lv_color_hex(0x888888), 0);
+    lv_obj_set_style_pad_all(note, 10, 0);
     
     return page;
 }
-
-
 
 // 页面事件处理器
 static void page_event_handler(lv_event_t* e) {
     if (!g_settings_state) return;
     
+    // 删除未使用的变量或添加(void)obj;
     settings_page_type_t page_type = (settings_page_type_t)lv_event_get_user_data(e);
     
     printf("Page event: switching to page type %d\n", page_type);
@@ -155,6 +391,9 @@ static void page_event_handler(lv_event_t* e) {
         
         // 更新当前页面
         g_settings_state->current_page = page_type;
+        
+        // 更新侧边栏高亮
+        update_sidebar_highlight(page_type);
         
         // 清理未使用的页面
         cleanup_unused_pages();
@@ -283,14 +522,17 @@ static void settings_app_create(app_t* app) {
     // About
     cont = menu_create_text(section, LV_SYMBOL_HOME, "关于本机", LV_MENU_ITEM_BUILDER_VARIANT_1);
     lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_ABOUT);
+    g_settings_state->pages[PAGE_TYPE_ABOUT].sidebar_item = cont;
     
     // Display
     cont = menu_create_text(section, LV_SYMBOL_EYE_OPEN, "显示", LV_MENU_ITEM_BUILDER_VARIANT_1);
     lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_DISPLAY);
+    g_settings_state->pages[PAGE_TYPE_DISPLAY].sidebar_item = cont;
     
     // Sound
     cont = menu_create_text(section, LV_SYMBOL_VOLUME_MAX, "声音", LV_MENU_ITEM_BUILDER_VARIANT_1);
     lv_obj_add_event_cb(cont, page_event_handler, LV_EVENT_CLICKED, (void*)PAGE_TYPE_SOUND);
+    g_settings_state->pages[PAGE_TYPE_SOUND].sidebar_item = cont;
 
     lv_menu_set_sidebar_page(menu, g_settings_state->root_page);
 
@@ -306,6 +548,9 @@ static void settings_app_create(app_t* app) {
     
     printf("Settings app created with new menu structure\n");
     app_manager_log_memory_usage("After settings app creation");
+    
+    // 默认打开"关于本机"页面
+    lv_obj_send_event(g_settings_state->pages[PAGE_TYPE_ABOUT].sidebar_item, LV_EVENT_CLICKED, (void*)PAGE_TYPE_ABOUT);
 }
 
 // 设置应用销毁
@@ -323,6 +568,7 @@ static void settings_app_destroy(app_t* app) {
             g_settings_state->pages[i].page_obj = NULL;
             g_settings_state->pages[i].is_created = false;
             g_settings_state->pages[i].is_active = false;
+            g_settings_state->pages[i].sidebar_item = NULL;
         }
         
         // 菜单对象会在应用容器销毁时自动删除
@@ -351,4 +597,4 @@ static void settings_app_destroy(app_t* app) {
 void register_settings_app(void) {
     app_manager_register_app("设置", LV_SYMBOL_SETTINGS, 
                              settings_app_create, settings_app_destroy);
-} 
+}

@@ -6,11 +6,8 @@
 void app_main(void) {
     // Initialize hardware
     hal_init();
-    
-    // Initialize touchpad
-    // hal_touchpad_init();
 
-    // Initialize our GUI
+    // Initialize system
     gui_init(lvDisp);
 
     bsp_display_unlock();
