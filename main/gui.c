@@ -6,6 +6,7 @@
 #include "app_music_player.h"
 #include "app_file_manager.h"
 #include "app_pwm_servo.h"
+#include "app_photo.h"  // 添加照片应用头文件
 #include "gesture_handler.h"
 #include "app_test.h"
 
@@ -26,6 +27,7 @@ void gui_init(lv_disp_t *disp)
     register_music_player_app();
     register_file_manager_app();
     register_pwm_servo_app();
+    register_photo_app();  // 注册照片应用
     register_test_app();
     //register_audio_loopback_app(); removed due to bugs
     
@@ -48,4 +50,4 @@ void gui_init(lv_disp_t *disp)
     // #ifdef DEBUG_SYSTEM_TESTS
     // run_system_tests();
     // #endif
-} 
+}
