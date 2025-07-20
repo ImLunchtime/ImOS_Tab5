@@ -8,7 +8,6 @@
 #include "app_pwm_servo.h"
 #include "app_photo.h"  // 添加照片应用头文件
 #include "gesture_handler.h"
-#include "app_test.h"
 
 // 包含自定义字体（只包含一次）
 #include "assets/simhei_32.c"
@@ -27,9 +26,7 @@ void gui_init(lv_disp_t *disp)
     register_music_player_app();
     register_file_manager_app();
     register_pwm_servo_app();
-    register_photo_app();  // 注册照片应用
-    register_test_app();
-    //register_audio_loopback_app(); removed due to bugs
+    register_photo_app();
     
     // 启动所有auto_start的Overlay
     overlay_t* overlay = app_manager_get_overlay_list();

@@ -14,7 +14,7 @@
 
 // 包含image1.c文件
 #include "assets/image1.c"
-#include "assets/almaficoast.c"
+#include "assets/scenery1.c"
 
 #ifndef LV_ATTRIBUTE_MEM_ALIGN
 #define LV_ATTRIBUTE_MEM_ALIGN
