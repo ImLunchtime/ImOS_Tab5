@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "gui.h"
 #include "hal.h"
+#include "project_defs.h"
 
 void app_main(void) {
     // Initialize hardware

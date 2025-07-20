@@ -16,8 +16,10 @@ LV_FONT_DECLARE(simhei_32);
 // extern const lv_img_dsc_t img_photo2;
 // extern const lv_img_dsc_t img_photo3;
 // 声明新添加的图片
+#ifdef UNSANITIZED
 extern const lv_img_dsc_t image1;
-extern const lv_img_dsc_t almaficoast;
+#endif
+extern const lv_img_dsc_t scenery1;
 
 // 照片项结构
 typedef struct {
@@ -51,8 +53,10 @@ static photo_item_t photo_items[] = {
     // {"照片1", &img_photo1, false},
     // {"照片2", &img_photo2, false},
     // {"照片3", &img_photo3, false},
+    #ifdef UNSANITIZED
     {"照片1", &image1, false},
-    {"照片2", &almaficoast, false},
+    #endif
+    {"照片2", &scenery1, false},
 };
 
 // 前向声明

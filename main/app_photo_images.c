@@ -6,15 +6,13 @@
     #endif
 #endif
 
-#if defined(LV_LVGL_H_INCLUDE_SIMPLE)
-    #include "lvgl.h"
-#else
-    #include "lvgl/lvgl.h"
-#endif
+#include "lvgl.h"
 
 // 包含image1.c文件
+#ifdef UNSANITIZED
 #include "assets/image1.c"
-#include "assets/almaficoast.c"
+#endif
+#include "assets/scenery1.c"
 
 #ifndef LV_ATTRIBUTE_MEM_ALIGN
 #define LV_ATTRIBUTE_MEM_ALIGN
