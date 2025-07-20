@@ -254,6 +254,12 @@ static void refresh_app_list(lv_obj_t* list, bool force_refresh) {
         return;
     }
     
+    // 验证对象有效性
+    if (!lv_obj_is_valid(list)) {
+        printf("Error: app list container is invalid\n");
+        return;
+    }
+    
     // 如果不是强制刷新且已有子项，跳过创建
     if (!force_refresh && lv_obj_get_child_count(list) > 0) {
         printf("App list already populated, skipping refresh\n");
@@ -261,6 +267,12 @@ static void refresh_app_list(lv_obj_t* list, bool force_refresh) {
     }
     
     printf("Refreshing app list...\n");
+    
+    // 暂停LVGL渲染，避免在创建过程中触发布局更新
+    lv_disp_t* disp = lv_obj_get_disp(list);
+    if (disp) {
+        lv_disp_enable_invalidation(disp, false);
+    }
     
     // 清理现有应用项的内存（如果有的话）
     uint32_t child_count = lv_obj_get_child_count(list);
@@ -272,15 +284,49 @@ static void refresh_app_list(lv_obj_t* list, bool force_refresh) {
     // 清空现有列表
     lv_obj_clean(list);
     
+    // 确保列表对象仍然有效
+    if (!lv_obj_is_valid(list)) {
+        printf("Error: app list became invalid after cleaning\n");
+        if (disp) {
+            lv_disp_enable_invalidation(disp, true);
+        }
+        return;
+    }
+    
     // 添加所有应用
     app_t* app = app_manager_get_app_list();
     int app_count = 0;
     while (app) {
+        // 验证应用数据有效性 - 修复：name是数组，只检查第一个字符
+        if (app->name[0] == '\0') {
+            printf("Warning: skipping app with empty name\n");
+            app = app->next;
+            continue;
+        }
+        
         printf("Adding app to list: %s\n", app->name);
+        
+        // 创建应用项前再次验证列表有效性
+        if (!lv_obj_is_valid(list)) {
+            printf("Error: app list became invalid during creation\n");
+            break;
+        }
+        
         create_app_item(list, app);
         app_count++;
         app = app->next;
+        
+        // 在每个应用项创建后添加小延迟，避免过快创建导致内存访问冲突
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
+    
+    // 恢复LVGL渲染
+    if (disp) {
+        lv_disp_enable_invalidation(disp, true);
+    }
+    
+    // 强制刷新显示
+    lv_obj_invalidate(list);
     
     printf("Total apps added to list: %d\n", app_count);
 }

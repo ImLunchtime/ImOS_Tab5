@@ -202,15 +202,15 @@ static void version_click_event_cb(lv_event_t* e) {
         lv_obj_set_style_text_font(dialog, &simhei_32, 0);
         
         // 设置对话框内容
-        char msg[64];
-        snprintf(msg, sizeof(msg), "Current unlock status: %s", unlocked ? "true" : "false");
+        char msg[128];
+        snprintf(msg, sizeof(msg), "Current unlock status, please reboot to apply the changes: %s", unlocked ? "true" : "false");
         lv_msgbox_add_text(dialog, msg);
         
         // 添加确定按钮
-        lv_msgbox_add_footer_button(dialog, "确定");
+        // lv_msgbox_add_footer_button(dialog, "确定");
         
         // 添加事件处理
-        lv_obj_add_event_cb(dialog, unlock_dialog_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+        // lv_obj_add_event_cb(dialog, unlock_dialog_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
         
         // 居中显示
         lv_obj_center(dialog);
