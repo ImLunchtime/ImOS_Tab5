@@ -2,12 +2,14 @@
 #include "app_manager.h"
 #include "menu_utils.h"
 #include "hal.h"
+#include "content_lock.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_heap_caps.h>
+#include <esp_system.h>
 
 // 声明自定义字体
 LV_FONT_DECLARE(simhei_32);
@@ -37,6 +39,10 @@ typedef struct {
     settings_page_t pages[PAGE_TYPE_COUNT];
     settings_page_type_t current_page;
     bool is_initialized;
+    
+    // 版本号点击计数
+    uint32_t version_click_count;
+    uint32_t last_click_time;
 } settings_state_t;
 
 // 全局状态变量
@@ -53,6 +59,8 @@ static void update_sidebar_highlight(settings_page_type_t active_page);
 static void brightness_slider_event_cb(lv_event_t* e);
 static void volume_slider_event_cb(lv_event_t* e);
 static void speaker_switch_event_cb(lv_event_t* e);
+static void version_click_event_cb(lv_event_t* e);
+static void unlock_dialog_event_cb(lv_event_t* e);
 
 // 安全的内存分配函数
 static void* safe_malloc(size_t size) {
@@ -158,6 +166,67 @@ static void update_sidebar_highlight(settings_page_type_t active_page) {
     }
 }
 
+// 版本号点击事件回调
+static void version_click_event_cb(lv_event_t* e) {
+    if (!g_settings_state) return;
+    
+    uint32_t current_time = hal_get_uptime_ms();
+    
+    // 如果距离上次点击超过3秒，重置计数
+    if (current_time - g_settings_state->last_click_time > 3000) {
+        g_settings_state->version_click_count = 0;
+    }
+    
+    g_settings_state->version_click_count++;
+    g_settings_state->last_click_time = current_time;
+    
+    printf("Version clicked %lu times\n", (unsigned long)g_settings_state->version_click_count);
+    
+    // 点击5次后切换解锁状态
+    if (g_settings_state->version_click_count >= 5) {
+        g_settings_state->version_click_count = 0;
+        
+        // 切换解锁状态
+        esp_err_t ret = content_lock_toggle();
+        if (ret != ESP_OK) {
+            printf("Failed to toggle content lock: %s\n", esp_err_to_name(ret));
+            return;
+        }
+        
+        // 获取新的解锁状态
+        bool unlocked = content_lock_is_unlocked();
+        
+        // 创建对话框 - 修复LVGL 9.x的API
+        lv_obj_t* dialog = lv_msgbox_create(NULL);
+        lv_msgbox_add_title(dialog, "内容锁状态");
+        lv_obj_set_style_text_font(dialog, &simhei_32, 0);
+        
+        // 设置对话框内容
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Current unlock status: %s", unlocked ? "true" : "false");
+        lv_msgbox_add_text(dialog, msg);
+        
+        // 添加确定按钮
+        lv_msgbox_add_footer_button(dialog, "确定");
+        
+        // 添加事件处理
+        lv_obj_add_event_cb(dialog, unlock_dialog_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+        
+        // 居中显示
+        lv_obj_center(dialog);
+    }
+}
+
+// 解锁对话框事件回调
+static void unlock_dialog_event_cb(lv_event_t* e) {
+    lv_obj_t* dialog = lv_event_get_target(e);
+    
+    // 关闭对话框
+    lv_msgbox_close(dialog);
+    
+    // 不重启了，有bug
+}
+
 // About页面创建函数 - 重新设计
 static lv_obj_t* create_about_page(lv_obj_t* menu) {
     printf("Creating About page\n");
@@ -239,7 +308,12 @@ static lv_obj_t* create_about_page(lv_obj_t* menu) {
     // 芯片详细信息
     menu_create_text(bottom_section, LV_SYMBOL_SETTINGS, "芯片型号: ESP32-P4", LV_MENU_ITEM_BUILDER_VARIANT_1);
     menu_create_text(bottom_section, LV_SYMBOL_SETTINGS, "CPU: 单核 P4 @ 400MHz", LV_MENU_ITEM_BUILDER_VARIANT_1);
-    menu_create_text(bottom_section, LV_SYMBOL_SETTINGS, "系统版本: 0.1 build 239", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    
+    // 可点击的系统版本 - 添加点击事件
+    lv_obj_t* version_item = menu_create_text(bottom_section, LV_SYMBOL_SETTINGS, "系统版本: 0.1 build 239", LV_MENU_ITEM_BUILDER_VARIANT_1);
+    lv_obj_add_flag(version_item, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(version_item, version_click_event_cb, LV_EVENT_CLICKED, NULL);
+    
     menu_create_text(bottom_section, LV_SYMBOL_SETTINGS, "LVGL版本: 9.2.2", LV_MENU_ITEM_BUILDER_VARIANT_1);
     menu_create_text(bottom_section, LV_SYMBOL_SETTINGS, "ESP-IDF版本: v5.4.1", LV_MENU_ITEM_BUILDER_VARIANT_1);
     

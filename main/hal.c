@@ -1,4 +1,5 @@
 #include "hal.h"
+#include "nvs_manager.h"
 //#include "system_test.h"
 #include <stdio.h>
 #include <freertos/FreeRTOS.h>
@@ -17,8 +18,15 @@ void hal_init(void)
 
     printf("Initializing HAL...\n");
 
+    // Initialize NVS first
+    esp_err_t ret = nvs_manager_init();
+    if (ret != ESP_OK) {
+        printf("Failed to initialize NVS manager: %s\n", esp_err_to_name(ret));
+        // Continue with other initializations even if NVS fails
+    }
+
     // Initialize I2C bus
-    esp_err_t ret = bsp_i2c_init();
+    ret = bsp_i2c_init();
     if (ret != ESP_OK) {
         printf("Failed to initialize I2C bus: %s\n", esp_err_to_name(ret));
         return;

@@ -16,4 +16,6 @@ idf_component_register(SRCS "app_photo_images.c"
                             "hal_sdcard.c"
                             "app_music_player.c"
                             "app_file_manager.c"
+                            "nvs_manager.c"
+                            "content_lock.c"
                     INCLUDE_DIRS ".")

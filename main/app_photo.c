@@ -1,6 +1,7 @@
 #include "app_photo.h"
 #include "app_manager.h"
 #include "menu_utils.h"
+#include "nvs_manager.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -20,6 +21,7 @@ typedef struct {
     const char* name;           // 照片名称
     const lv_img_dsc_t* img;    // 照片图像描述符
     bool is_selected;           // 是否被选中
+    bool is_hidden;             // 是否隐藏
 } photo_item_t;
 
 // 照片应用状态
@@ -44,8 +46,8 @@ static photo_app_state_t* g_photo_state = NULL;
 
 // 照片数据 - 添加/删除图片修改此处
 static photo_item_t photo_items[] = {
-    {"照片1", &image1, false},
-    {"照片2", &scenery1, false},
+    {"照片1", &image1, false, false},  // image1可以被隐藏
+    {"照片2", &scenery1, false, false},
 };
 
 // 前向声明
@@ -88,6 +90,39 @@ static void safe_free(void* ptr) {
     }
 }
 
+// 获取可见照片数量
+static uint32_t get_visible_photo_count(void) {
+    uint32_t count = 0;
+    bool unlocked = nvs_manager_get_unlocked();
+    
+    for (uint32_t i = 0; i < sizeof(photo_items) / sizeof(photo_items[0]); i++) {
+        // image1只有在解锁状态下才可见
+        if (photo_items[i].img == &image1 && !unlocked) {
+            continue;
+        }
+        count++;
+    }
+    return count;
+}
+
+// 获取第n个可见照片的索引
+static int32_t get_visible_photo_index(uint32_t visible_index) {
+    uint32_t count = 0;
+    bool unlocked = nvs_manager_get_unlocked();
+    
+    for (uint32_t i = 0; i < sizeof(photo_items) / sizeof(photo_items[0]); i++) {
+        // image1只有在解锁状态下才可见
+        if (photo_items[i].img == &image1 && !unlocked) {
+            continue;
+        }
+        if (count == visible_index) {
+            return i;
+        }
+        count++;
+    }
+    return -1;
+}
+
 // 创建照片列表UI
 static void create_photo_list_ui(void) {
     if (!g_photo_state || !g_photo_state->photo_list) {
@@ -104,9 +139,17 @@ static void create_photo_list_ui(void) {
     lv_obj_set_flex_align(g_photo_state->photo_list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_gap(g_photo_state->photo_list, 8, 0);
     
+    bool unlocked = nvs_manager_get_unlocked();
+    uint32_t visible_index = 0;
+    
     // 创建照片项
     for (uint32_t i = 0; i < g_photo_state->photo_count; i++) {
         photo_item_t* photo = &g_photo_state->photos[i];
+        
+        // 检查是否应该隐藏image1
+        if (photo->img == &image1 && !unlocked) {
+            continue;
+        }
         
         // 创建照片项容器
         lv_obj_t* item_container = lv_obj_create(g_photo_state->photo_list);
@@ -148,8 +191,10 @@ static void create_photo_list_ui(void) {
         lv_obj_set_style_text_font(name_label, &simhei_32, 0);
         lv_obj_align_to(name_label, icon, LV_ALIGN_OUT_RIGHT_MID, 12, 0);
         
-        // 添加点击事件
+        // 添加点击事件，使用原始索引
         lv_obj_add_event_cb(item_container, photo_item_event_cb, LV_EVENT_CLICKED, (void*)(intptr_t)i);
+        
+        visible_index++;
     }
 }
 
@@ -157,6 +202,18 @@ static void create_photo_list_ui(void) {
 static void update_preview(int32_t index) {
     if (!g_photo_state || index < 0 || index >= g_photo_state->photo_count) {
         return;
+    }
+    
+    // 检查选中的照片是否可见
+    bool unlocked = nvs_manager_get_unlocked();
+    if (g_photo_state->photos[index].img == &image1 && !unlocked) {
+        // 如果选中的是隐藏的image1，选择第一个可见的照片
+        int32_t visible_index = get_visible_photo_index(0);
+        if (visible_index >= 0) {
+            index = visible_index;
+        } else {
+            return; // 没有可见的照片
+        }
     }
     
     // 更新选中状态
@@ -262,9 +319,13 @@ static void photo_app_create(app_t* app) {
     // 创建照片列表UI
     create_photo_list_ui();
     
-    // 默认选中第一张照片
-    if (g_photo_state->photo_count > 0) {
-        update_preview(0);
+    // 默认选中第一张可见照片
+    uint32_t visible_count = get_visible_photo_count();
+    if (visible_count > 0) {
+        int32_t first_visible = get_visible_photo_index(0);
+        if (first_visible >= 0) {
+            update_preview(first_visible);
+        }
     }
     
     g_photo_state->is_initialized = true;
