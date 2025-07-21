@@ -2,6 +2,7 @@
 #include "app_manager.h"
 #include "gesture_handler.h"
 #include "hal.h"
+#include "content_lock.h"  // 添加内容锁头文件
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -247,6 +248,22 @@ static void cleanup_app_item(lv_obj_t* item) {
     (void)item; // 标记参数未使用
 }
 
+// 检查应用是否需要内容锁
+static bool app_requires_content_lock(const char* app_name) {
+    if (!app_name) {
+        return false;
+    }
+    
+    // 检查是否是需要内容锁的应用
+    if (strcmp(app_name, "Ark") == 0) {
+        return true;
+    }
+    
+    // 可以在这里添加其他需要内容锁的应用
+    
+    return false;
+}
+
 // 智能刷新应用列表 - 只在需要时创建/更新
 static void refresh_app_list(lv_obj_t* list, bool force_refresh) {
     if (!list) {
@@ -293,6 +310,10 @@ static void refresh_app_list(lv_obj_t* list, bool force_refresh) {
         return;
     }
     
+    // 检查内容锁状态
+    bool content_unlocked = content_lock_is_unlocked();
+    printf("Content lock status: %s\n", content_unlocked ? "unlocked" : "locked");
+    
     // 添加所有应用
     app_t* app = app_manager_get_app_list();
     int app_count = 0;
@@ -300,6 +321,16 @@ static void refresh_app_list(lv_obj_t* list, bool force_refresh) {
         // 验证应用数据有效性 - 修复：name是数组，只检查第一个字符
         if (app->name[0] == '\0') {
             printf("Warning: skipping app with empty name\n");
+            app = app->next;
+            continue;
+        }
+        
+        // 检查应用是否需要内容锁
+        bool requires_lock = app_requires_content_lock(app->name);
+        
+        // 如果应用需要内容锁但内容锁未解锁，则跳过该应用
+        if (requires_lock && !content_unlocked) {
+            printf("Skipping locked app: %s (content lock required)\n", app->name);
             app = app->next;
             continue;
         }

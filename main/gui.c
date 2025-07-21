@@ -7,6 +7,7 @@
 #include "app_file_manager.h"
 #include "app_pwm_servo.h"
 #include "app_photo.h"  // 添加照片应用头文件
+#include "app_ark.h"    // 添加Ark应用头文件
 #include "gesture_handler.h"
 
 // 包含自定义字体（只包含一次）
@@ -27,6 +28,7 @@ void gui_init(lv_disp_t *disp)
     register_file_manager_app();
     register_pwm_servo_app();
     register_photo_app();
+    register_ark_app();             // 注册Ark应用
     
     // 启动所有auto_start的Overlay
     overlay_t* overlay = app_manager_get_overlay_list();
