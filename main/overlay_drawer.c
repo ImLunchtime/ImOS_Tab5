@@ -55,13 +55,20 @@ typedef struct {
     lv_obj_t* volume_label;
     lv_obj_t* brightness_label;
     lv_obj_t* speaker_switch;  // 扬声器开关
+    lv_obj_t* control_center_btn;  // 控制中心按钮
+    lv_obj_t* control_panel;       // 控制面板
     bool is_open;
     bool is_initialized;  // 添加初始化标志
     bool deep_cleaned;    // 是否进行了深度清理
+    bool panel_open;      // 控制面板是否打开
     uint32_t last_open_time;  // 上次打开时间
     uint32_t idle_cleanup_threshold;  // 空闲清理阈值（毫秒）
     lv_anim_t slide_anim;
 } drawer_state_t;
+
+static void control_center_btn_cb(lv_event_t* e);
+static void control_panel_close_cb(lv_event_t* e);
+static void create_control_panel(drawer_state_t* state);
 
 // 应用项点击事件
 static void app_item_event_cb(lv_event_t* e) {
@@ -383,27 +390,14 @@ static void drawer_overlay_create(app_t* app) {
     state->idle_cleanup_threshold = 30000; // 30秒后清理
     state->last_open_time = 0;
     state->deep_cleaned = false;
+    state->panel_open = false;
     
     // 获取屏幕尺寸
     lv_coord_t screen_width = lv_display_get_horizontal_resolution(NULL);
     lv_coord_t screen_height = lv_display_get_vertical_resolution(NULL);
     lv_coord_t drawer_width = screen_width / 4;  // 1/4屏幕宽度
     
-    // 先创建简化的半透明背景
-    // state->background = lv_obj_create(app->container);
-    // lv_obj_set_size(state->background, LV_PCT(100), LV_PCT(100));
-    // lv_obj_set_pos(state->background, 0, 0);
-    // lv_obj_set_style_bg_color(state->background, lv_color_hex(0x000000), 0);
-    // lv_obj_set_style_bg_opa(state->background, LV_OPA_30, 0);  // 降低透明度减少GPU负担
-    // lv_obj_set_style_border_width(state->background, 0, 0);
-    // lv_obj_set_style_pad_all(state->background, 0, 0);
-    // lv_obj_add_flag(state->background, LV_OBJ_FLAG_HIDDEN);  // 初始隐藏
-    
-    // 确保背景能接收点击事件
-    //lv_obj_clear_flag(state->background, LV_OBJ_FLAG_SCROLLABLE);
-    //lv_obj_add_event_cb(state->background, background_event_cb, LV_EVENT_CLICKED, NULL);
-    
-    // 创建抽屉容器（在背景之后创建，确保在上层）
+    // 创建抽屉容器
     state->drawer_container = lv_obj_create(app->container);
     lv_obj_set_size(state->drawer_container, drawer_width, screen_height);
     lv_obj_set_pos(state->drawer_container, -drawer_width, 0);  // 初始位置在屏幕左侧外
@@ -427,13 +421,13 @@ static void drawer_overlay_create(app_t* app) {
     lv_obj_set_style_pad_all(title, 20, 0);  // 增加内边距
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
     
-    // 创建应用列表 (为底部滑块留出更多空间)
+    // 创建应用列表 (为底部控制中心按钮留出空间)
     state->app_list = lv_obj_create(state->drawer_container);
-    lv_obj_set_size(state->app_list, LV_PCT(100), screen_height - 250);  // 增加底部空间到250像素
-    lv_obj_align_to(state->app_list, title, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);  // 增加与标题的间距
+    lv_obj_set_size(state->app_list, LV_PCT(100), screen_height - 150);  // 为控制中心按钮留出空间
+    lv_obj_align_to(state->app_list, title, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
     lv_obj_set_style_bg_opa(state->app_list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(state->app_list, 0, 0);
-    lv_obj_set_style_pad_all(state->app_list, 15, 0);  // 增加内边距适配高分辨率
+    lv_obj_set_style_pad_all(state->app_list, 15, 0);
     
     // 确保列表容器不阻挡事件传播
     lv_obj_clear_flag(state->app_list, LV_OBJ_FLAG_EVENT_BUBBLE);
@@ -452,113 +446,25 @@ static void drawer_overlay_create(app_t* app) {
     lv_obj_set_flex_align(state->app_list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_gap(state->app_list, 16, 0);  // 增加项目间距适配新的按钮设计
     
-    // 创建音量控制区域
-    lv_obj_t* volume_container = lv_obj_create(state->drawer_container);
-    lv_obj_set_size(volume_container, LV_PCT(90), 80);  // 增加容器高度到60像素
-    lv_obj_align_to(volume_container, state->app_list, LV_ALIGN_OUT_BOTTOM_LEFT, 10, 15);  // 增加间距到15像素
-    lv_obj_set_style_bg_opa(volume_container, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(volume_container, 0, 0);
-    lv_obj_set_style_pad_all(volume_container, 8, 0);  // 增加内边距到8像素
+    // 创建控制中心按钮
+    state->control_center_btn = lv_btn_create(state->drawer_container);
+    lv_obj_set_size(state->control_center_btn, LV_PCT(90), 50);
+    lv_obj_align_to(state->control_center_btn, state->app_list, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
+    lv_obj_set_style_bg_color(state->control_center_btn, lv_color_hex(0x4CAF50), 0);
+    lv_obj_set_style_radius(state->control_center_btn, 8, 0);
     
-    // 确保音量容器不会阻止事件传递
-    lv_obj_clear_flag(volume_container, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(volume_container, LV_OBJ_FLAG_EVENT_BUBBLE);
+    // 控制中心按钮标签
+    lv_obj_t* btn_label = lv_label_create(state->control_center_btn);
+    lv_label_set_text(btn_label, "控制中心");
+    lv_obj_set_style_text_color(btn_label, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_font(btn_label, &simhei_32, 0);
+    lv_obj_center(btn_label);
     
-    // 音量标签
-    state->volume_label = lv_label_create(volume_container);
-    lv_label_set_text_fmt(state->volume_label, "音量: %d%%", hal_get_speaker_volume());
-    lv_obj_set_style_text_color(state->volume_label, lv_color_hex(0xFF6600), 0);  // 橙色
-    lv_obj_set_style_text_font(state->volume_label, &simhei_32, 0);  // 使用中文字体
-    lv_obj_align(state->volume_label, LV_ALIGN_TOP_LEFT, 0, 0);
+    // 添加按钮点击事件
+    lv_obj_add_event_cb(state->control_center_btn, control_center_btn_cb, LV_EVENT_CLICKED, state);
     
-    // 音量滑块 (调窄一些，为扬声器开关留出空间)
-    state->volume_slider = lv_slider_create(volume_container);
-    lv_obj_set_size(state->volume_slider, LV_PCT(50), 18);  // 调窄到50%宽度，为开关留出更多空间
-    lv_obj_align_to(state->volume_slider, state->volume_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 8);  // 增加间距到8像素
-    lv_slider_set_range(state->volume_slider, 0, 100);
-    lv_slider_set_value(state->volume_slider, hal_get_speaker_volume(), LV_ANIM_OFF);
-    
-    // 设置音量滑块样式 (橙色主题)
-    lv_obj_set_style_bg_color(state->volume_slider, lv_color_hex(0xFF9966), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(state->volume_slider, lv_color_hex(0xFF6600), LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(state->volume_slider, lv_color_hex(0xFF4400), LV_PART_KNOB);
-    
-    // 添加音量滑块事件
-    lv_obj_add_event_cb(state->volume_slider, volume_slider_event_cb, LV_EVENT_VALUE_CHANGED, state);
-    
-    // 扬声器开关 (移除标签，只保留开关)
-    state->speaker_switch = lv_switch_create(volume_container);
-    lv_obj_set_size(state->speaker_switch, 50, 25);  // 调整开关大小
-    lv_obj_align_to(state->speaker_switch, state->volume_slider, LV_ALIGN_OUT_RIGHT_MID, 15, 0);  // 放在滑块右边，减少间距
-    
-    // 设置开关状态
-    bool speaker_enabled = hal_get_speaker_enable();
-    printf("Initial speaker state: %s\n", speaker_enabled ? "enabled" : "disabled");
-    if (speaker_enabled) {
-        lv_obj_add_state(state->speaker_switch, LV_STATE_CHECKED);
-    } else {
-        lv_obj_clear_state(state->speaker_switch, LV_STATE_CHECKED);
-    }
-    
-    // 设置开关样式 (绿色主题)
-    lv_obj_set_style_bg_color(state->speaker_switch, lv_color_hex(0xCCCCCC), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(state->speaker_switch, lv_color_hex(0x00AA00), LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(state->speaker_switch, lv_color_hex(0xFFFFFF), LV_PART_KNOB);
-    
-    // 确保开关可以点击
-    lv_obj_add_flag(state->speaker_switch, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_clear_flag(state->speaker_switch, LV_OBJ_FLAG_SCROLLABLE);
-    
-    // 添加扬声器开关事件 - 监听多种事件类型
-    lv_obj_add_event_cb(state->speaker_switch, speaker_switch_event_cb, LV_EVENT_VALUE_CHANGED, state);
-    lv_obj_add_event_cb(state->speaker_switch, speaker_switch_event_cb, LV_EVENT_CLICKED, state);
-    
-    printf("Speaker switch created and configured\n");
-    
-    // 测试：验证开关是否可点击
-    printf("Testing switch clickability...\n");
-    bool is_clickable = lv_obj_has_flag(state->speaker_switch, LV_OBJ_FLAG_CLICKABLE);
-    printf("Switch clickable: %s\n", is_clickable ? "true" : "false");
-    
-    // 调试：检查开关位置和大小
-    lv_coord_t switch_x = lv_obj_get_x(state->speaker_switch);
-    lv_coord_t switch_y = lv_obj_get_y(state->speaker_switch);
-    lv_coord_t switch_w = lv_obj_get_width(state->speaker_switch);
-    lv_coord_t switch_h = lv_obj_get_height(state->speaker_switch);
-    printf("Switch position: x=%ld, y=%ld, w=%ld, h=%ld\n", switch_x, switch_y, switch_w, switch_h);
-    
-    // 创建亮度控制区域
-    lv_obj_t* brightness_container = lv_obj_create(state->drawer_container);
-    lv_obj_set_size(brightness_container, LV_PCT(90), 80);  // 增加容器高度到60像素
-    lv_obj_align_to(brightness_container, volume_container, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 15);  // 增加间距到15像素
-    lv_obj_set_style_bg_opa(brightness_container, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(brightness_container, 0, 0);
-    lv_obj_set_style_pad_all(brightness_container, 4, 0);  // 增加内边距到8像素
-    
-    // 亮度标签
-    state->brightness_label = lv_label_create(brightness_container);
-    lv_label_set_text_fmt(state->brightness_label, "亮度: %d%%", hal_get_display_brightness());
-    lv_obj_set_style_text_color(state->brightness_label, lv_color_hex(0x0066FF), 0);  // 蓝色
-    lv_obj_set_style_text_font(state->brightness_label, &simhei_32, 0);  // 使用中文字体
-    lv_obj_align(state->brightness_label, LV_ALIGN_TOP_LEFT, 0, 0);
-    
-    // 亮度滑块
-    state->brightness_slider = lv_slider_create(brightness_container);
-    lv_obj_set_size(state->brightness_slider, LV_PCT(100), 18);  // 调整滑块高度到22像素
-    lv_obj_align_to(state->brightness_slider, state->brightness_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 8);  // 增加间距到8像素
-    lv_slider_set_range(state->brightness_slider, 20, 100);  // 最低亮度20%
-    lv_slider_set_value(state->brightness_slider, hal_get_display_brightness(), LV_ANIM_OFF);
-    
-    // 设置亮度滑块样式 (蓝色主题)
-    lv_obj_set_style_bg_color(state->brightness_slider, lv_color_hex(0x6699FF), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(state->brightness_slider, lv_color_hex(0x0066FF), LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(state->brightness_slider, lv_color_hex(0x0044CC), LV_PART_KNOB);
-    
-    // 添加亮度滑块事件
-    lv_obj_add_event_cb(state->brightness_slider, brightness_slider_event_cb, LV_EVENT_VALUE_CHANGED, state);
-    
-    // 不在创建时刷新应用列表，延迟到第一次打开
-    // refresh_app_list(state->app_list, false); // 移除这行
+    // 创建控制面板
+    create_control_panel(state);
     
     // 保存状态到用户数据
     app->user_data = state;
@@ -812,3 +718,160 @@ void app_drawer_check_cleanup(void) {
         deep_clean_drawer(state);
     }
 }
+
+
+// 控制面板关闭事件回调
+static void control_panel_close_cb(lv_event_t* e) {
+    drawer_state_t* state = (drawer_state_t*)lv_event_get_user_data(e);
+    if (state && state->control_panel) {
+        lv_obj_add_flag(state->control_panel, LV_OBJ_FLAG_HIDDEN);
+        state->panel_open = false;
+        printf("Control panel closed\n");
+    }
+}
+
+// 控制中心按钮点击事件
+static void control_center_btn_cb(lv_event_t* e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_CLICKED) {
+        drawer_state_t* state = (drawer_state_t*)lv_event_get_user_data(e);
+        if (state) {
+            if (state->panel_open) {
+                // 关闭面板
+                lv_obj_add_flag(state->control_panel, LV_OBJ_FLAG_HIDDEN);
+                state->panel_open = false;
+                printf("Control panel closed\n");
+            } else {
+                // 打开面板
+                lv_obj_clear_flag(state->control_panel, LV_OBJ_FLAG_HIDDEN);
+                state->panel_open = true;
+                
+                // 更新滑块值
+                lv_slider_set_value(state->volume_slider, hal_get_speaker_volume(), LV_ANIM_OFF);
+                lv_slider_set_value(state->brightness_slider, hal_get_display_brightness(), LV_ANIM_OFF);
+                lv_label_set_text_fmt(state->volume_label, "音量: %d%%", hal_get_speaker_volume());
+                lv_label_set_text_fmt(state->brightness_label, "亮度: %d%%", hal_get_display_brightness());
+                
+                // 更新开关状态
+                bool speaker_enabled = hal_get_speaker_enable();
+                if (speaker_enabled) {
+                    lv_obj_add_state(state->speaker_switch, LV_STATE_CHECKED);
+                } else {
+                    lv_obj_clear_state(state->speaker_switch, LV_STATE_CHECKED);
+                }
+                
+                printf("Control panel opened\n");
+            }
+        }
+    }
+}
+
+// 创建控制面板
+// 创建控制面板
+static void create_control_panel(drawer_state_t* state) {
+    if (!state || !state->drawer_container) return;
+    
+    // 获取屏幕尺寸
+    lv_coord_t screen_width = lv_display_get_horizontal_resolution(NULL);
+    lv_coord_t screen_height = lv_display_get_vertical_resolution(NULL);
+    
+    // 创建控制面板（全屏覆盖）
+    state->control_panel = lv_obj_create(lv_screen_active());
+    lv_obj_set_size(state->control_panel, screen_width, screen_height);
+    lv_obj_set_pos(state->control_panel, 0, 0);
+    lv_obj_set_style_bg_color(state->control_panel, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(state->control_panel, LV_OPA_50, 0);  // 半透明背景
+    lv_obj_set_style_border_width(state->control_panel, 0, 0);
+    lv_obj_set_style_pad_all(state->control_panel, 0, 0);
+    lv_obj_add_flag(state->control_panel, LV_OBJ_FLAG_HIDDEN);  // 初始隐藏
+    lv_obj_clear_flag(state->control_panel, LV_OBJ_FLAG_SCROLLABLE);
+    
+    // 点击背景关闭面板
+    lv_obj_add_event_cb(state->control_panel, control_panel_close_cb, LV_EVENT_CLICKED, state);
+    
+    // 创建控制面板内容容器
+    lv_obj_t* panel_content = lv_obj_create(state->control_panel);
+    lv_obj_set_size(panel_content, 400, 300);
+    lv_obj_align(panel_content, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(panel_content, lv_color_hex(0xF5F5F5), 0);
+    lv_obj_set_style_bg_opa(panel_content, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(panel_content, 1, 0);
+    lv_obj_set_style_border_color(panel_content, lv_color_hex(0xE0E0E0), 0);
+    lv_obj_set_style_radius(panel_content, 12, 0);
+    lv_obj_set_style_pad_all(panel_content, 0, 0);  // 移除所有padding
+    lv_obj_clear_flag(panel_content, LV_OBJ_FLAG_SCROLLABLE);
+    
+    // 阻止事件冒泡到背景
+    lv_obj_clear_flag(panel_content, LV_OBJ_FLAG_EVENT_BUBBLE);
+    
+    // 面板标题
+    lv_obj_t* title = lv_label_create(panel_content);
+    lv_label_set_text(title, "控制中心");
+    lv_obj_set_style_text_color(title, lv_color_hex(0x333333), 0);
+    lv_obj_set_style_text_font(title, &simhei_32, 0);
+    lv_obj_set_pos(title, 20, 15);  // 直接设置标题位置
+    
+    // 音量标签
+    state->volume_label = lv_label_create(panel_content);
+    lv_label_set_text_fmt(state->volume_label, "音量: %d%%", hal_get_speaker_volume());
+    lv_obj_set_style_text_color(state->volume_label, lv_color_hex(0xFF6600), 0);
+    lv_obj_set_style_text_font(state->volume_label, &simhei_32, 0);
+    lv_obj_set_pos(state->volume_label, 20, 70);  // 直接设置位置
+    
+    // 音量滑块
+    state->volume_slider = lv_slider_create(panel_content);
+    lv_obj_set_size(state->volume_slider, 200, 18);
+    lv_obj_set_pos(state->volume_slider, 20, 105);  // 直接设置位置
+    lv_slider_set_range(state->volume_slider, 0, 100);
+    lv_slider_set_value(state->volume_slider, hal_get_speaker_volume(), LV_ANIM_OFF);
+    
+    // 设置音量滑块样式
+    lv_obj_set_style_bg_color(state->volume_slider, lv_color_hex(0xFF9966), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(state->volume_slider, lv_color_hex(0xFF6600), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(state->volume_slider, lv_color_hex(0xFF4400), LV_PART_KNOB);
+    
+    lv_obj_add_event_cb(state->volume_slider, volume_slider_event_cb, LV_EVENT_VALUE_CHANGED, state);
+    
+    // 扬声器开关
+    state->speaker_switch = lv_switch_create(panel_content);
+    lv_obj_set_size(state->speaker_switch, 50, 25);
+    lv_obj_set_pos(state->speaker_switch, 230, 100);  // 直接设置位置，紧贴滑块右侧
+    
+    bool speaker_enabled = hal_get_speaker_enable();
+    if (speaker_enabled) {
+        lv_obj_add_state(state->speaker_switch, LV_STATE_CHECKED);
+    } else {
+        lv_obj_clear_state(state->speaker_switch, LV_STATE_CHECKED);
+    }
+    
+    lv_obj_set_style_bg_color(state->speaker_switch, lv_color_hex(0xCCCCCC), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(state->speaker_switch, lv_color_hex(0x00AA00), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(state->speaker_switch, lv_color_hex(0xFFFFFF), LV_PART_KNOB);
+    
+    lv_obj_add_flag(state->speaker_switch, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(state->speaker_switch, speaker_switch_event_cb, LV_EVENT_VALUE_CHANGED, state);
+    lv_obj_add_event_cb(state->speaker_switch, speaker_switch_event_cb, LV_EVENT_CLICKED, state);
+    
+    // 亮度标签
+    state->brightness_label = lv_label_create(panel_content);
+    lv_label_set_text_fmt(state->brightness_label, "亮度: %d%%", hal_get_display_brightness());
+    lv_obj_set_style_text_color(state->brightness_label, lv_color_hex(0x0066FF), 0);
+    lv_obj_set_style_text_font(state->brightness_label, &simhei_32, 0);
+    lv_obj_set_pos(state->brightness_label, 20, 160);  // 直接设置位置
+    
+    // 亮度滑块
+    state->brightness_slider = lv_slider_create(panel_content);
+    lv_obj_set_size(state->brightness_slider, 280, 18);  // 固定宽度280像素
+    lv_obj_set_pos(state->brightness_slider, 20, 195);  // 直接设置位置
+    lv_slider_set_range(state->brightness_slider, 20, 100);
+    lv_slider_set_value(state->brightness_slider, hal_get_display_brightness(), LV_ANIM_OFF);
+    
+    lv_obj_set_style_bg_color(state->brightness_slider, lv_color_hex(0x6699FF), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(state->brightness_slider, lv_color_hex(0x0066FF), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(state->brightness_slider, lv_color_hex(0x0044CC), LV_PART_KNOB);
+    
+    lv_obj_add_event_cb(state->brightness_slider, brightness_slider_event_cb, LV_EVENT_VALUE_CHANGED, state);
+    
+    state->panel_open = false;
+}
+
