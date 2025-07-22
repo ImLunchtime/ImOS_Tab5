@@ -5,9 +5,9 @@
 #include <stdint.h>
 
 // Include sub-modules
-#include "hal_audio.h"
-#include "hal_display.h"
-#include "hal_sdcard.h"
+#include "hal/hal_audio.h"
+#include "hal/hal_display.h"
+#include "hal/hal_sdcard.h"
 
 #ifdef __cplusplus
 extern "C" {

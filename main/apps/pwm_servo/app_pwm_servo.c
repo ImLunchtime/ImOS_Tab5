@@ -1,5 +1,5 @@
-#include "app_pwm_servo.h"
-#include "menu_utils.h"
+#include "apps/pwm_servo/app_pwm_servo.h"
+#include "utils/menu_utils.h"
 #include <stdio.h>
 #include <string.h>
 #include <freertos/FreeRTOS.h>

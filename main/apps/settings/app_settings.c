@@ -1,8 +1,8 @@
-#include "app_settings.h"
-#include "app_manager.h"
-#include "menu_utils.h"
+#include "apps/settings/app_settings.h"
+#include "managers/app_manager.h"
+#include "utils/menu_utils.h"
 #include "hal.h"
-#include "content_lock.h"
+#include "managers/content_lock.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,6 +10,7 @@
 #include <freertos/task.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
+#include "utils/memory_utils.h"
 
 // 声明自定义字体
 LV_FONT_DECLARE(simhei_32);
@@ -61,37 +62,6 @@ static void volume_slider_event_cb(lv_event_t* e);
 static void speaker_switch_event_cb(lv_event_t* e);
 static void version_click_event_cb(lv_event_t* e);
 static void unlock_dialog_event_cb(lv_event_t* e);
-
-// 安全的内存分配函数
-static void* safe_malloc(size_t size) {
-    void* ptr = NULL;
-    
-    // 首先尝试使用PSRAM
-    if (heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >= size) {
-        ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
-        if (ptr) {
-            printf("Allocated %zu bytes from PSRAM\n", size);
-            return ptr;
-        }
-    }
-    
-    // 如果PSRAM不够，使用常规内存
-    ptr = malloc(size);
-    if (ptr) {
-        printf("Allocated %zu bytes from regular heap\n", size);
-    } else {
-        printf("Failed to allocate %zu bytes\n", size);
-    }
-    
-    return ptr;
-}
-
-// 安全的内存释放函数
-static void safe_free(void* ptr) {
-    if (ptr) {
-        free(ptr);
-    }
-}
 
 // 亮度滑块事件回调
 static void brightness_slider_event_cb(lv_event_t* e) {
@@ -203,7 +173,7 @@ static void version_click_event_cb(lv_event_t* e) {
         
         // 设置对话框内容
         char msg[128];
-        snprintf(msg, sizeof(msg), "Current unlock status, please reboot to apply the changes: %s", unlocked ? "true" : "false");
+        snprintf(msg, sizeof(msg), "请点击电源键重启以应用更改，当前解锁状态为 %s", unlocked ? "已解锁" : "未解锁");
         lv_msgbox_add_text(dialog, msg);
         
         // 添加确定按钮

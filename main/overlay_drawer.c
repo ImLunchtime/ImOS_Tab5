@@ -1,8 +1,8 @@
 #include "overlay_drawer.h"
-#include "app_manager.h"
-#include "gesture_handler.h"
+#include "managers/app_manager.h"
+#include "managers/gesture_handler.h"
 #include "hal.h"
-#include "content_lock.h"  // 添加内容锁头文件
+#include "managers/content_lock.h"  // 添加内容锁头文件
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

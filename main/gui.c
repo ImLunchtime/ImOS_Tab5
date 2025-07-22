@@ -1,14 +1,15 @@
 #include "gui.h"
-#include "app_manager.h"
+#include "managers/app_manager.h"
 #include "overlay_drawer.h"
-#include "app_launcher.h"
-#include "app_settings.h"
-#include "app_music_player.h"
-#include "app_file_manager.h"
-#include "app_pwm_servo.h"
-#include "app_photo.h"  // 添加照片应用头文件
-#include "app_ark.h"    // 添加Ark应用头文件
-#include "gesture_handler.h"
+#include "apps/launcher/app_launcher.h"
+#include "apps/settings/app_settings.h"
+#include "apps/music_player/app_music_player.h"
+#include "apps/file_manager/app_file_manager.c"
+#include "apps/pwm_servo/app_pwm_servo.c"
+#include "apps/photo/app_photo.c"  // 添加照片应用头文件
+#include "apps/ark/app_ark.c"    // 添加Ark应用头文件
+#include "managers/gesture_handler.c"
+#include "utils/memory_utils.h"
 
 // 包含自定义字体（只包含一次）
 #include "assets/simhei_32.c"

@@ -1,7 +1,7 @@
-#include "app_music_player.h"
-#include "app_manager.h"
-#include "hal_sdcard.h"
-#include "hal_audio.h"
+#include "apps/music_player/app_music_player.h"
+#include "managers/app_manager.h"
+#include "hal/hal_sdcard.h"
+#include "hal/hal_audio.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

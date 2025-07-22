@@ -3,5 +3,18 @@
     "idf.portWin": "COM5",
     "idf.espIdfPathWin": "C:/Espressif541/frameworks/esp-idf-v5.4.1/",
     "idf.toolsPathWin": "C:\\Espressif541",
-    "idf.pythonInstallPath": "C:\\Espressif541\\tools\\idf-python\\3.11.2\\python.exe"
+    "idf.pythonInstallPath": "C:\\Espressif541\\tools\\idf-python\\3.11.2\\python.exe",
+    "files.associations": {
+        "app_manager.h": "c",
+        "hal_sdcard.h": "c",
+        "menu_utils.h": "c",
+        "hal_audio.h": "c",
+        "app_settings.h": "c",
+        "string.h": "c",
+        "content_lock.h": "c",
+        "nvs_manager.h": "c",
+        "stdio.h": "c",
+        "stdlib.h": "c",
+        "hal.h": "c"
+    }
 }

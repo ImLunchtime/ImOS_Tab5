@@ -1,11 +1,13 @@
-#include "app_ark.h"
-#include "app_manager.h"
-#include "content_lock.h"
+#include "apps/ark/app_ark.h"
+
+#include "managers/app_manager.h"
+#include "managers/content_lock.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include "utils/memory_utils.h"
 
 // 声明自定义字体
 LV_FONT_DECLARE(simhei_32);
@@ -26,23 +28,7 @@ static const char * btnm_map[] = {"左转", "前", "右转", "上", "\n",
                                   "功率输出", "电源", ""
                                  };
 
-// 安全的内存分配函数
-static void* safe_malloc(size_t size) {
-    void* ptr = malloc(size);
-    if (ptr) {
-        printf("Allocated %zu bytes for Ark app\n", size);
-    } else {
-        printf("Failed to allocate %zu bytes for Ark app\n", size);
-    }
-    return ptr;
-}
 
-// 安全的内存释放函数
-static void safe_free(void* ptr) {
-    if (ptr) {
-        free(ptr);
-    }
-}
 
 void create_buttonmatrix(lv_obj_t* parent){
     lv_obj_t * btnm1 = lv_buttonmatrix_create(parent);
@@ -94,7 +80,7 @@ static void chart_add_data(lv_timer_t * t)
         return;
     }
 
-    lv_chart_set_next_value(chart, ser, lv_rand(10, 90));
+    lv_chart_set_next_value(chart, ser, lv_rand(30, 90));
 
     uint16_t p = lv_chart_get_point_count(chart);
     uint16_t s = lv_chart_get_x_start_point(chart, ser);
@@ -120,7 +106,7 @@ void create_chart(lv_obj_t* parent)
     lv_obj_t * chart = lv_chart_create(parent);
     lv_chart_set_update_mode(chart, LV_CHART_UPDATE_MODE_CIRCULAR);
     lv_obj_set_style_size(chart, 0, 0, LV_PART_INDICATOR);
-    lv_obj_set_size(chart, 500, 250);
+    lv_obj_set_size(chart, 700, 500);
     lv_obj_center(chart);
 
     lv_chart_set_point_count(chart, 80);
@@ -183,44 +169,51 @@ void create_ark_control_gui(lv_obj_t* parent)
 
     /*Add content to the tabs*/
     // -=-=-=-=-=-=-=-=-=[Tab1]=-=-=-=-=-=-=-=-=-=-
-    // 创建网格布局容器
-    lv_obj_t * grid = lv_obj_create(tab1);
-    lv_obj_set_size(grid, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_layout(grid, LV_LAYOUT_GRID);
-    lv_obj_set_style_pad_row(grid, 10, 0);  // 行间距10像素
-    
-    // 设置网格布局参数
-    static lv_coord_t col_dsc[] = {LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST};
-    static lv_coord_t row_dsc[] = {LV_GRID_FR(2), LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST};
-    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
-
-    // 创建标签并放置在网格中
-    lv_obj_t * label = lv_label_create(grid);
-    lv_label_set_text(label, "First tab");
-    lv_obj_set_grid_cell(label, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_START, 0, 1);
-
     // 创建图表容器并放置在网格的上部
-    lv_obj_t * chart_cont = lv_obj_create(grid);
-    lv_obj_set_grid_cell(chart_cont, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_STRETCH, 0, 1);
-    create_chart(chart_cont);
-
-    // 创建按钮矩阵容器并放置在网格的下部
-    lv_obj_t * btnm_cont = lv_obj_create(grid);
-    lv_obj_set_grid_cell(btnm_cont, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_STRETCH, 1, 1);
-    create_buttonmatrix(btnm_cont);
+    create_chart(tab1);
 
     // -=-=-=-=-=-=-=-=-=[Tab2]=-=-=-=-=-=-=-=-=-=-
-    label = lv_label_create(tab2);
-    lv_label_set_text(label, "Second tab");
+    // 创建一个容器作为页面布局
+    lv_obj_t * layout = lv_obj_create(tab2);
+    lv_obj_set_size(layout, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_flex_flow(layout, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(layout, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+
+    // 创建列表
+    lv_obj_t * list = lv_list_create(layout);
+    lv_obj_set_size(list, LV_PCT(100), LV_PCT(100));
+    
+    // 添加一些示例列表项
+    lv_list_add_text(list, "Devices");
+    lv_list_add_btn(list, LV_SYMBOL_FILE, "1");
+    lv_list_add_btn(list, LV_SYMBOL_DIRECTORY, "2");
+    lv_list_add_btn(list, LV_SYMBOL_FILE, "3");
+    lv_list_add_btn(list, LV_SYMBOL_DIRECTORY, "4");
+    lv_list_add_btn(list, LV_SYMBOL_FILE, "5");
+    lv_list_add_btn(list, LV_SYMBOL_DIRECTORY, "6");
+    lv_list_add_btn(list, LV_SYMBOL_FILE, "7");
+    lv_list_add_btn(list, LV_SYMBOL_DIRECTORY, "8");
+
+    // 创建FAB按钮
+    lv_obj_t * fab = lv_btn_create(layout);
+    lv_obj_set_size(fab, 128, 128);
+    lv_obj_add_flag(fab, LV_OBJ_FLAG_FLOATING);
+    lv_obj_align(fab, LV_ALIGN_BOTTOM_RIGHT, -20, 20);
+    
+    // 为FAB添加图标
+    lv_obj_t * fab_label = lv_label_create(fab);
+    lv_label_set_text(fab_label, LV_SYMBOL_PLUS);
+    lv_obj_center(fab_label);
+
     // -=-=-=-=-=-=-=-=-=[Tab3]=-=-=-=-=-=-=-=-=-=-
-    label = lv_label_create(tab3);
-    lv_label_set_text(label, "Third tab");
+    lv_obj_t * label2 = lv_label_create(tab3);
+    lv_label_set_text(label2, "Third tab");
     // -=-=-=-=-=-=-=-=-=[Tab4]=-=-=-=-=-=-=-=-=-=-
-    label = lv_label_create(tab4);
-    lv_label_set_text(label, "Forth tab");
+    lv_obj_t * label3 = lv_label_create(tab4);
+    lv_label_set_text(label3, "Forth tab");
     // -=-=-=-=-=-=-=-=-=[Tab5]=-=-=-=-=-=-=-=-=-=-
-    label = lv_label_create(tab5);
-    lv_label_set_text(label, "Fifth tab");
+    lv_obj_t * label4 = lv_label_create(tab5);
+    lv_label_set_text(label4, "Fifth tab");
 
     lv_obj_remove_flag(lv_tabview_get_content(tabview), LV_OBJ_FLAG_SCROLLABLE);
     

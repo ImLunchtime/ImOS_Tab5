@@ -1,7 +1,8 @@
-#include "app_file_manager.h"
-#include "app_manager.h"
-#include "hal_sdcard.h"
-#include "menu_utils.h"
+#include "apps/file_manager/app_file_manager.h"
+
+#include "managers/app_manager.h"
+#include "hal/hal_sdcard.h"
+#include "utils/menu_utils.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,6 +11,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_heap_caps.h>
+#include "utils/memory_utils.h"
 
 // 声明自定义字体
 LV_FONT_DECLARE(simhei_32);
@@ -63,44 +65,12 @@ static void update_status_bar(void);
 static void create_action_buttons(void);
 static void file_item_event_cb(lv_event_t* e);
 static void action_button_event_cb(lv_event_t* e);
-static void* safe_malloc(size_t size);
-static void safe_free(void* ptr);
 static void cleanup_file_list(void);
 static bool is_hidden_file(const char* name);
 static char* get_file_extension(const char* filename);
 static const char* get_file_icon(const char* filename, file_type_t type);
 static void format_file_size(size_t size, char* buffer, size_t buffer_size);
 
-// 安全的内存分配函数
-static void* safe_malloc(size_t size) {
-    void* ptr = NULL;
-    
-    // 首先尝试使用PSRAM
-    if (heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >= size) {
-        ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
-        if (ptr) {
-            printf("File manager allocated %zu bytes from PSRAM\n", size);
-            return ptr;
-        }
-    }
-    
-    // 如果PSRAM不够，使用常规内存
-    ptr = malloc(size);
-    if (ptr) {
-        printf("File manager allocated %zu bytes from regular heap\n", size);
-    } else {
-        printf("Failed to allocate %zu bytes for file manager\n", size);
-    }
-    
-    return ptr;
-}
-
-// 安全的内存释放函数
-static void safe_free(void* ptr) {
-    if (ptr) {
-        free(ptr);
-    }
-}
 
 // 清理文件列表
 static void cleanup_file_list(void) {

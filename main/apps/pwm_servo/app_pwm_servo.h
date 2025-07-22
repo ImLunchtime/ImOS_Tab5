@@ -1,8 +1,8 @@
 #ifndef APP_PWM_SERVO_H
 #define APP_PWM_SERVO_H
 
-#include "app_manager.h"
-#include "hal_pwm.h"
+#include "managers/app_manager.h"
+#include "hal/hal_pwm.h"
 #include <stdint.h>
 #include <stdbool.h>
 

@@ -1,5 +1,5 @@
-#include "content_lock.h"
-#include "nvs_manager.h"
+#include "managers/content_lock.h"
+#include "managers/nvs_manager.h"
 
 bool content_lock_is_unlocked(void) {
     return nvs_manager_get_unlocked();

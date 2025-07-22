@@ -1,5 +1,5 @@
-#include "app_launcher.h"
-#include "app_manager.h"
+#include "apps/launcher/app_launcher.h"
+#include "managers/app_manager.h"
 #include "overlay_drawer.h"
 #include <stdio.h>
 //#include "assets/bg.c"

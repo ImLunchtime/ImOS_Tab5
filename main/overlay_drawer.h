@@ -1,6 +1,6 @@
 #pragma once
 
-#include "app_manager.h"
+#include "managers/app_manager.h"
 
 // 抽屉控制函数
 void app_drawer_open(void);

@@ -1,5 +1,5 @@
-#include "gesture_handler.h"
-#include "app_manager.h"
+#include "managers/gesture_handler.h"
+#include "managers/app_manager.h"
 #include "overlay_drawer.h"
 #include <string.h>
 #include <stdio.h>

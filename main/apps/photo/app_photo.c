@@ -1,13 +1,14 @@
-#include "app_photo.h"
-#include "app_manager.h"
-#include "menu_utils.h"
-#include "nvs_manager.h"
+#include "apps/photo/app_photo.h"
+#include "managers/app_manager.h"
+#include "utils/menu_utils.h"
+#include "managers/nvs_manager.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_heap_caps.h>
+#include "utils/memory_utils.h"
 
 // 声明自定义字体
 LV_FONT_DECLARE(simhei_32);
@@ -56,39 +57,6 @@ static void photo_app_destroy(app_t* app);
 static void create_photo_list_ui(void);
 static void update_preview(int32_t index);
 static void photo_item_event_cb(lv_event_t* e);
-static void* safe_malloc(size_t size);
-static void safe_free(void* ptr);
-
-// 安全的内存分配函数
-static void* safe_malloc(size_t size) {
-    void* ptr = NULL;
-    
-    // 首先尝试使用PSRAM
-    if (heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >= size) {
-        ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
-        if (ptr) {
-            printf("Photo app allocated %zu bytes from PSRAM\n", size);
-            return ptr;
-        }
-    }
-    
-    // 如果PSRAM不够，使用常规内存
-    ptr = malloc(size);
-    if (ptr) {
-        printf("Photo app allocated %zu bytes from regular heap\n", size);
-    } else {
-        printf("Failed to allocate %zu bytes for photo app\n", size);
-    }
-    
-    return ptr;
-}
-
-// 安全的内存释放函数
-static void safe_free(void* ptr) {
-    if (ptr) {
-        free(ptr);
-    }
-}
 
 // 获取可见照片数量
 static uint32_t get_visible_photo_count(void) {
