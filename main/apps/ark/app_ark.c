@@ -23,29 +23,6 @@ typedef struct {
 // 全局状态变量
 static ark_state_t* g_ark_state = NULL;
 
-static const char * btnm_map[] = {"左转", "前", "右转", "上", "\n",
-                                  "左", "后", "右", "下", "\n",
-                                  "功率输出", "电源", ""
-                                 };
-
-
-
-void create_buttonmatrix(lv_obj_t* parent){
-    lv_obj_t * btnm1 = lv_buttonmatrix_create(parent);
-    lv_buttonmatrix_set_map(btnm1, btnm_map);
-    // lv_buttonmatrix_set_button_width(btnm1, 10, 2);        /*Make "Action1" twice as wide as "Action2"*/
-    lv_buttonmatrix_set_button_ctrl(btnm1, 10, LV_BUTTONMATRIX_CTRL_CHECKABLE);
-    lv_buttonmatrix_set_button_ctrl(btnm1, 11, LV_BUTTONMATRIX_CTRL_CHECKED);
-    
-    // 设置按钮矩阵字体
-    lv_obj_set_style_text_font(btnm1, &simhei_32, 0);
-    
-    // 设置按钮矩阵大小为父容器的60%
-    lv_obj_set_size(btnm1, LV_PCT(60), LV_PCT(100));
-    
-    lv_obj_align(btnm1, LV_ALIGN_CENTER, 0, 0);
-}
-
 // 图表数据更新定时器回调函数
 static void chart_add_data(lv_timer_t * t)
 {
@@ -80,7 +57,7 @@ static void chart_add_data(lv_timer_t * t)
         return;
     }
 
-    lv_chart_set_next_value(chart, ser, lv_rand(30, 90));
+    lv_chart_set_next_value(chart, ser, lv_rand(30, 60));
 
     uint16_t p = lv_chart_get_point_count(chart);
     uint16_t s = lv_chart_get_x_start_point(chart, ser);
@@ -109,13 +86,13 @@ void create_chart(lv_obj_t* parent)
     lv_obj_set_size(chart, 700, 500);
     lv_obj_center(chart);
 
-    lv_chart_set_point_count(chart, 80);
+    lv_chart_set_point_count(chart, 100);
     lv_chart_series_t * ser = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
     
     /*Prefill with data*/
     uint32_t i;
-    for(i = 0; i < 80; i++) {
-        lv_chart_set_next_value(chart, ser, lv_rand(10, 90));
+    for(i = 0; i < 100; i++) {
+        lv_chart_set_next_value(chart, ser, lv_rand(30, 90));
     }
 
     // 保存图表引用并创建定时器
