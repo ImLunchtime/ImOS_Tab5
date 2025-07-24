@@ -155,31 +155,30 @@ void create_ark_control_gui(lv_obj_t* parent)
     lv_obj_set_size(layout, LV_PCT(100), LV_PCT(100));
     lv_obj_set_flex_flow(layout, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(layout, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-
+    lv_obj_set_style_border_opa(layout, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(layout, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(layout, 0, LV_PART_MAIN);
+    lv_obj_set_style_margin_all(layout, 0, LV_PART_MAIN);
     // 创建列表
     lv_obj_t * list = lv_list_create(layout);
     lv_obj_set_size(list, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_pad_all(list, 0, LV_PART_MAIN);
+    lv_obj_set_style_margin_all(list, 0, LV_PART_MAIN);
     
     // 添加一些示例列表项
-    lv_list_add_text(list, "Devices");
-    lv_list_add_btn(list, LV_SYMBOL_FILE, "1");
-    lv_list_add_btn(list, LV_SYMBOL_DIRECTORY, "2");
-    lv_list_add_btn(list, LV_SYMBOL_FILE, "3");
-    lv_list_add_btn(list, LV_SYMBOL_DIRECTORY, "4");
-    lv_list_add_btn(list, LV_SYMBOL_FILE, "5");
-    lv_list_add_btn(list, LV_SYMBOL_DIRECTORY, "6");
-    lv_list_add_btn(list, LV_SYMBOL_FILE, "7");
-    lv_list_add_btn(list, LV_SYMBOL_DIRECTORY, "8");
+    lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "1");
 
     // 创建FAB按钮
-    lv_obj_t * fab = lv_btn_create(layout);
+    lv_obj_t * fab = lv_btn_create(tab2);
     lv_obj_set_size(fab, 128, 128);
     lv_obj_add_flag(fab, LV_OBJ_FLAG_FLOATING);
-    lv_obj_align(fab, LV_ALIGN_BOTTOM_RIGHT, -20, 20);
+    lv_obj_align(fab, LV_ALIGN_BOTTOM_RIGHT, -20, -20);
+    lv_obj_set_style_radius(fab, 64, LV_PART_MAIN);
     
     // 为FAB添加图标
     lv_obj_t * fab_label = lv_label_create(fab);
-    lv_label_set_text(fab_label, LV_SYMBOL_PLUS);
+    lv_label_set_text(fab_label, LV_SYMBOL_VOLUME_MAX);
+    lv_obj_set_style_text_font(fab_label, &lv_font_montserrat_64, 0); // 设置图标字体大小为64px
     lv_obj_center(fab_label);
 
     // -=-=-=-=-=-=-=-=-=[Tab3]=-=-=-=-=-=-=-=-=-=-
