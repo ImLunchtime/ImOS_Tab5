@@ -165,9 +165,31 @@ void create_ark_control_gui(lv_obj_t* parent)
     lv_obj_set_style_pad_all(list, 0, LV_PART_MAIN);
     lv_obj_set_style_margin_all(list, 0, LV_PART_MAIN);
     
+    // 为列表设置自定义字体
+    lv_obj_set_style_text_font(list, &simhei_32, LV_PART_MAIN);
+    
     // 添加一些示例列表项
-    lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "1");
+    lv_obj_t *btn1 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "1");
+    lv_obj_t *btn2 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "2");
+    lv_obj_t *btn3 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "3");
+    lv_obj_t *btn4 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "4");
+    lv_obj_t *btn5 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "5");
+    lv_obj_t *btn6 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "6");
 
+    // 为每个按钮的文本标签设置自定义字体
+    lv_obj_t *label;
+    label = lv_obj_get_child(btn1, -1);
+    lv_obj_set_style_text_font(label, &simhei_32, 0);
+    label = lv_obj_get_child(btn2, -1);
+    lv_obj_set_style_text_font(label, &simhei_32, 0);
+    label = lv_obj_get_child(btn3, -1);
+    lv_obj_set_style_text_font(label, &simhei_32, 0);
+    label = lv_obj_get_child(btn4, -1);
+    lv_obj_set_style_text_font(label, &simhei_32, 0);
+    label = lv_obj_get_child(btn5, -1);
+    lv_obj_set_style_text_font(label, &simhei_32, 0);
+    label = lv_obj_get_child(btn6, -1);
+    lv_obj_set_style_text_font(label, &simhei_32, 0);
     // 创建FAB按钮
     lv_obj_t * fab = lv_btn_create(tab2);
     lv_obj_set_size(fab, 128, 128);
@@ -178,7 +200,7 @@ void create_ark_control_gui(lv_obj_t* parent)
     // 为FAB添加图标
     lv_obj_t * fab_label = lv_label_create(fab);
     lv_label_set_text(fab_label, LV_SYMBOL_VOLUME_MAX);
-    lv_obj_set_style_text_font(fab_label, &lv_font_montserrat_64, 0); // 设置图标字体大小为64px
+    lv_obj_set_style_text_font(fab_label, &lv_font_montserrat_44, 0); // 设置图标字体大小为64px
     lv_obj_center(fab_label);
 
     // -=-=-=-=-=-=-=-=-=[Tab3]=-=-=-=-=-=-=-=-=-=-
