@@ -1,373 +1,18 @@
 #include "overlay_drawer.h"
+#include "overlay_drawer_types.h"
+#include "overlay_drawer_ui.h"
+#include "overlay_drawer_control.h"
+#include "overlay_drawer_events.h"
+#include "overlay_drawer_memory.h"
 #include "managers/app_manager.h"
 #include "managers/gesture_handler.h"
 #include "hal.h"
-#include "managers/content_lock.h"  // 添加内容锁头文件
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-
-// 声明自定义字体
-LV_FONT_DECLARE(simhei_32);
-
-// 预定义的颜色数组，为应用图标提供不同的颜色
-static const uint32_t app_color_hex[] = {
-    0xFF6B6B,  // 红色
-    0x4ECDC4,  // 青色
-    0x45B7D1,  // 蓝色
-    0x96CEB4,  // 绿色
-    0xFFEAA7,  // 黄色
-    0xDDA0DD,  // 紫色
-    0xFFB347,  // 橙色
-    0x87CEEB,  // 天蓝色
-    0xFF69B4,  // 粉色
-    0x20B2AA,  // 海绿色
-    0x9370DB,  // 中紫色
-    0x32CD32,  // 酸橙绿
-};
-
-// 获取应用的颜色（基于应用名称的哈希值）
-static lv_color_t get_app_color(const char* app_name) {
-    if (!app_name) {
-        return lv_color_hex(app_color_hex[0]);
-    }
-    
-    // 简单的哈希算法
-    uint32_t hash = 0;
-    for (int i = 0; app_name[i] != '\0'; i++) {
-        hash = ((hash << 5) + hash) + app_name[i];
-    }
-    
-    uint32_t color_index = hash % (sizeof(app_color_hex) / sizeof(app_color_hex[0]));
-    return lv_color_hex(app_color_hex[color_index]);
-}
-
-// 抽屉状态
-typedef struct {
-    lv_obj_t* drawer_container;
-    lv_obj_t* app_list;
-    //lv_obj_t* background;
-    lv_obj_t* volume_slider;
-    lv_obj_t* brightness_slider;
-    lv_obj_t* volume_label;
-    lv_obj_t* brightness_label;
-    lv_obj_t* speaker_switch;  // 扬声器开关
-    lv_obj_t* control_center_btn;  // 控制中心按钮
-    lv_obj_t* control_panel;       // 控制面板
-    bool is_open;
-    bool is_initialized;  // 添加初始化标志
-    bool deep_cleaned;    // 是否进行了深度清理
-    bool panel_open;      // 控制面板是否打开
-    uint32_t last_open_time;  // 上次打开时间
-    uint32_t idle_cleanup_threshold;  // 空闲清理阈值（毫秒）
-    lv_anim_t slide_anim;
-} drawer_state_t;
-
-static void control_center_btn_cb(lv_event_t* e);
-static void control_panel_close_cb(lv_event_t* e);
-static void create_control_panel(drawer_state_t* state);
-
-// 应用项点击事件
-static void app_item_event_cb(lv_event_t* e) {
-    lv_event_code_t code = lv_event_get_code(e);
-    app_t* app = (app_t*)lv_event_get_user_data(e);
-    
-    if (code == LV_EVENT_CLICKED && app) {
-        printf("*** APP ITEM CLICKED: %s ***\n", app->name);
-        
-        // 启动应用
-        bool success = app_manager_launch_app(app->name);
-        printf("App launch %s: %s\n", app->name, success ? "success" : "failed");
-        
-        // 关闭抽屉
-        app_drawer_close();
-    }
-}
-
-// 背景点击事件（关闭抽屉）
-__attribute__((unused)) static void background_event_cb(lv_event_t* e) {
-    printf("Background clicked - closing drawer\n");
-    app_drawer_close();
-}
-
-// 动画结束回调
-static void slide_anim_ready_cb(lv_anim_t* a) {
-    drawer_state_t* state = (drawer_state_t*)a->user_data;
-    if (!state->is_open) {
-        // 抽屉关闭后隐藏背景
-        //lv_obj_add_flag(state->background, LV_OBJ_FLAG_HIDDEN);
-        // 同时隐藏抽屉容器，确保不会拦截事件
-        lv_obj_add_flag(state->drawer_container, LV_OBJ_FLAG_HIDDEN);
-        printf("Drawer completely closed and hidden\n");
-        
-        // 标记可以安全清理（但不立即清理）
-        state->last_open_time = esp_timer_get_time() / 1000;
-    }
-}
-
-// 音量滑块事件回调
-static void volume_slider_event_cb(lv_event_t* e) {
-    lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t* slider = lv_event_get_target(e);
-    
-    if (code == LV_EVENT_VALUE_CHANGED) {
-        drawer_state_t* state = (drawer_state_t*)lv_event_get_user_data(e);
-        if (state && state->volume_label) {
-            int32_t value = lv_slider_get_value(slider);
-            hal_set_speaker_volume((uint8_t)value);
-            
-            // 更新标签显示
-            lv_label_set_text_fmt(state->volume_label, "音量: %d%%", (int)value);
-            printf("Volume changed to: %d%%\n", (int)value);
-        }
-    }
-}
-
-// 亮度滑块事件回调
-static void brightness_slider_event_cb(lv_event_t* e) {
-    lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t* slider = lv_event_get_target(e);
-    
-    if (code == LV_EVENT_VALUE_CHANGED) {
-        drawer_state_t* state = (drawer_state_t*)lv_event_get_user_data(e);
-        if (state && state->brightness_label) {
-            int32_t value = lv_slider_get_value(slider);
-            hal_set_display_brightness((uint8_t)value);
-            
-            // 更新标签显示
-            lv_label_set_text_fmt(state->brightness_label, "亮度: %d%%", (int)value);
-            printf("Brightness changed to: %d%%\n", (int)value);
-        }
-    }
-}
-
-// 扬声器开关事件回调
-static void speaker_switch_event_cb(lv_event_t* e) {
-    lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t* switch_obj = lv_event_get_target(e);
-    
-    printf("Speaker switch event: code=%d\n", code);
-    
-    if (code == LV_EVENT_VALUE_CHANGED || code == LV_EVENT_CLICKED) {
-        drawer_state_t* state = (drawer_state_t*)lv_event_get_user_data(e);
-        if (state) {
-            // 获取开关的当前状态
-            bool enabled = lv_obj_has_state(switch_obj, LV_STATE_CHECKED);
-            printf("Switch state: %s\n", enabled ? "checked" : "unchecked");
-            
-            // 调用HAL函数设置扬声器状态
-            hal_set_speaker_enable(enabled);
-            
-            printf("Speaker %s\n", enabled ? "enabled" : "disabled");
-            
-            // 强制刷新显示
-            lv_obj_invalidate(switch_obj);
-        }
-    }
-}
-
-// 创建应用项 - 新的按钮样式设计
-static void create_app_item(lv_obj_t* parent, app_t* app) {
-    if (!parent || !app) {
-        return;
-    }
-    
-    // 创建应用按钮容器
-    lv_obj_t* button_container = lv_obj_create(parent);
-    lv_obj_set_size(button_container, LV_PCT(100), 70);  // 增加高度适配高分辨率
-    
-    // 设置按钮样式：无背景、无边框、无阴影
-    lv_obj_set_style_bg_opa(button_container, LV_OPA_TRANSP, 0);  // 透明背景
-    lv_obj_set_style_border_width(button_container, 0, 0);  // 无边框
-    lv_obj_set_style_shadow_width(button_container, 0, 0);  // 无阴影
-    lv_obj_set_style_pad_all(button_container, 0, 0);
-    
-    // 按压效果：淡灰色背景
-    lv_obj_set_style_bg_color(button_container, lv_color_hex(0xDDDDDD), LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(button_container, LV_OPA_COVER, LV_STATE_PRESSED);
-    lv_obj_set_style_radius(button_container, 8, LV_STATE_PRESSED);  // 按压时圆角
-    
-    // 让容器可以接收点击事件
-    lv_obj_add_flag(button_container, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_clear_flag(button_container, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(button_container, LV_OBJ_FLAG_EVENT_BUBBLE);
-    
-    // 获取应用的颜色
-    lv_color_t app_color = get_app_color(app->name);
-    
-    // 计算颜色索引用于打印
-    uint32_t hash = 0;
-    for (int i = 0; app->name[i] != '\0'; i++) {
-        hash = ((hash << 5) + hash) + app->name[i];
-    }
-    uint32_t color_index = hash % (sizeof(app_color_hex) / sizeof(app_color_hex[0]));
-    
-    // 创建图标容器（圆形背景）
-    lv_obj_t* icon_container = lv_obj_create(button_container);
-    lv_obj_set_size(icon_container, 50, 50);  // 50x50像素的圆形
-    lv_obj_align(icon_container, LV_ALIGN_LEFT_MID, 16, 0);
-    
-    // 设置圆形背景
-    lv_obj_set_style_radius(icon_container, 25, 0);  // 25像素半径，形成圆形
-    lv_obj_set_style_bg_color(icon_container, app_color, 0);  // 使用应用颜色
-    lv_obj_set_style_bg_opa(icon_container, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(icon_container, 0, 0);
-    lv_obj_set_style_pad_all(icon_container, 0, 0);
-    
-    // 创建应用图标
-    lv_obj_t* icon = lv_label_create(icon_container);
-    if (app->icon[0] != '\0') {
-        lv_label_set_text(icon, app->icon);
-    } else {
-        // 如果没有图标，使用应用名称的第一个字符
-        char first_char[2] = {app->name[0], '\0'};
-        lv_label_set_text(icon, first_char);
-    }
-    
-    // 设置图标样式：白色文字，居中显示
-    lv_obj_set_style_text_color(icon, lv_color_hex(0xFFFFFF), 0);  // 白色图标
-    lv_obj_set_style_text_font(icon, &simhei_32, 0);  // 大图标字体
-    lv_obj_align(icon, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_pad_all(icon, 0, 0);
-    
-    // 创建应用名称标签
-    lv_obj_t* name_label = lv_label_create(button_container);
-    lv_label_set_text(name_label, app->name);
-    lv_obj_set_style_text_color(name_label, lv_color_hex(0x333333), 0);  // 深色文字
-    lv_obj_set_style_text_font(name_label, &simhei_32, 0);  // 使用中文字体
-    lv_obj_set_style_pad_all(name_label, 0, 0);
-    
-    // 将文字放在图标右侧
-    lv_obj_align_to(name_label, icon_container, LV_ALIGN_OUT_RIGHT_MID, 16, 0);
-    
-    // 添加点击事件到按钮容器
-    lv_obj_add_event_cb(button_container, app_item_event_cb, LV_EVENT_CLICKED, app);
-    
-    printf("Created app button: %s with color 0x%06lX\n", app->name, app_color_hex[color_index]);
-}
-
-// 清理应用项内存（现在已经不需要清理字符串了）
-static void cleanup_app_item(lv_obj_t* item) {
-    // 现在使用应用指针作为用户数据，不需要释放内存
-    (void)item; // 标记参数未使用
-}
-
-// 检查应用是否需要内容锁
-static bool app_requires_content_lock(const char* app_name) {
-    if (!app_name) {
-        return false;
-    }
-    
-    // 检查是否是需要内容锁的应用
-    if (strcmp(app_name, "Ark") == 0) {
-        return true;
-    }
-    
-    // 可以在这里添加其他需要内容锁的应用
-    
-    return false;
-}
-
-// 智能刷新应用列表 - 只在需要时创建/更新
-static void refresh_app_list(lv_obj_t* list, bool force_refresh) {
-    if (!list) {
-        printf("Error: app list container is NULL\n");
-        return;
-    }
-    
-    // 验证对象有效性
-    if (!lv_obj_is_valid(list)) {
-        printf("Error: app list container is invalid\n");
-        return;
-    }
-    
-    // 如果不是强制刷新且已有子项，跳过创建
-    if (!force_refresh && lv_obj_get_child_count(list) > 0) {
-        printf("App list already populated, skipping refresh\n");
-        return;
-    }
-    
-    printf("Refreshing app list...\n");
-    
-    // 暂停LVGL渲染，避免在创建过程中触发布局更新
-    lv_disp_t* disp = lv_obj_get_disp(list);
-    if (disp) {
-        lv_disp_enable_invalidation(disp, false);
-    }
-    
-    // 清理现有应用项的内存（如果有的话）
-    uint32_t child_count = lv_obj_get_child_count(list);
-    for (uint32_t i = 0; i < child_count; i++) {
-        lv_obj_t* child = lv_obj_get_child(list, i);
-        cleanup_app_item(child);
-    }
-    
-    // 清空现有列表
-    lv_obj_clean(list);
-    
-    // 确保列表对象仍然有效
-    if (!lv_obj_is_valid(list)) {
-        printf("Error: app list became invalid after cleaning\n");
-        if (disp) {
-            lv_disp_enable_invalidation(disp, true);
-        }
-        return;
-    }
-    
-    // 检查内容锁状态
-    bool content_unlocked = content_lock_is_unlocked();
-    printf("Content lock status: %s\n", content_unlocked ? "unlocked" : "locked");
-    
-    // 添加所有应用
-    app_t* app = app_manager_get_app_list();
-    int app_count = 0;
-    while (app) {
-        // 验证应用数据有效性 - 修复：name是数组，只检查第一个字符
-        if (app->name[0] == '\0') {
-            printf("Warning: skipping app with empty name\n");
-            app = app->next;
-            continue;
-        }
-        
-        // 检查应用是否需要内容锁
-        bool requires_lock = app_requires_content_lock(app->name);
-        
-        // 如果应用需要内容锁但内容锁未解锁，则跳过该应用
-        if (requires_lock && !content_unlocked) {
-            printf("Skipping locked app: %s (content lock required)\n", app->name);
-            app = app->next;
-            continue;
-        }
-        
-        printf("Adding app to list: %s\n", app->name);
-        
-        // 创建应用项前再次验证列表有效性
-        if (!lv_obj_is_valid(list)) {
-            printf("Error: app list became invalid during creation\n");
-            break;
-        }
-        
-        create_app_item(list, app);
-        app_count++;
-        app = app->next;
-        
-        // 在每个应用项创建后添加小延迟，避免过快创建导致内存访问冲突
-        vTaskDelay(pdMS_TO_TICKS(1));
-    }
-    
-    // 恢复LVGL渲染
-    if (disp) {
-        lv_disp_enable_invalidation(disp, true);
-    }
-    
-    // 强制刷新显示
-    lv_obj_invalidate(list);
-    
-    printf("Total apps added to list: %d\n", app_count);
-}
 
 // 创建应用抽屉Overlay
 static void drawer_overlay_create(app_t* app) {
@@ -392,79 +37,11 @@ static void drawer_overlay_create(app_t* app) {
     state->deep_cleaned = false;
     state->panel_open = false;
     
-    // 获取屏幕尺寸
-    lv_coord_t screen_width = lv_display_get_horizontal_resolution(NULL);
-    lv_coord_t screen_height = lv_display_get_vertical_resolution(NULL);
-    lv_coord_t drawer_width = screen_width / 4;  // 1/4屏幕宽度
-    
-    // 创建抽屉容器
-    state->drawer_container = lv_obj_create(app->container);
-    lv_obj_set_size(state->drawer_container, drawer_width, screen_height);
-    lv_obj_set_pos(state->drawer_container, -drawer_width, 0);  // 初始位置在屏幕左侧外
-    lv_obj_set_style_bg_color(state->drawer_container, lv_color_hex(0xF5F5F5), 0);  // 浅色主题
-    lv_obj_set_style_bg_opa(state->drawer_container, LV_OPA_COVER, 0);  // 完全不透明
-    lv_obj_set_style_border_width(state->drawer_container, 1, 0);
-    lv_obj_set_style_border_color(state->drawer_container, lv_color_hex(0xE0E0E0), 0);
-    lv_obj_set_style_pad_all(state->drawer_container, 0, 0);
-    lv_obj_add_flag(state->drawer_container, LV_OBJ_FLAG_HIDDEN);  // 初始隐藏
-    
-    // 确保抽屉容器不会传播点击事件到背景
-    lv_obj_clear_flag(state->drawer_container, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(state->drawer_container, LV_OBJ_FLAG_EVENT_BUBBLE);
-    
-    // 创建标题
-    lv_obj_t* title = lv_label_create(state->drawer_container);
-    lv_label_set_text(title, "应用");
-    lv_obj_set_style_text_color(title, lv_color_hex(0x333333), 0);  // 深色文字适配浅色主题
-    lv_obj_set_style_text_font(title, &simhei_32, 0);  // 使用中文字体
-    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_LEFT, 0);  // 左对齐
-    lv_obj_set_style_pad_all(title, 20, 0);  // 增加内边距
-    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
-    
-    // 创建应用列表 (为底部控制中心按钮留出空间)
-    state->app_list = lv_obj_create(state->drawer_container);
-    lv_obj_set_size(state->app_list, LV_PCT(100), screen_height - 150);  // 为控制中心按钮留出空间
-    lv_obj_align_to(state->app_list, title, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
-    lv_obj_set_style_bg_opa(state->app_list, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(state->app_list, 0, 0);
-    lv_obj_set_style_pad_all(state->app_list, 15, 0);
-    
-    // 确保列表容器不阻挡事件传播
-    lv_obj_clear_flag(state->app_list, LV_OBJ_FLAG_EVENT_BUBBLE);
-    // 启用滚动功能
-    lv_obj_add_flag(state->app_list, LV_OBJ_FLAG_SCROLLABLE);
-    // 设置滚动方向仅为垂直方向
-    lv_obj_set_scroll_dir(state->app_list, LV_DIR_VER);
-    // 设置滚动条样式
-    lv_obj_set_style_bg_opa(state->app_list, LV_OPA_10, LV_PART_SCROLLBAR);
-    lv_obj_set_style_width(state->app_list, 8, LV_PART_SCROLLBAR);
-    lv_obj_set_style_radius(state->app_list, 4, LV_PART_SCROLLBAR);
-    
-    // 设置列表布局
-    lv_obj_set_layout(state->app_list, LV_LAYOUT_FLEX);
-    lv_obj_set_flex_flow(state->app_list, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(state->app_list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_gap(state->app_list, 16, 0);  // 增加项目间距适配新的按钮设计
-    
-    // 创建控制中心按钮
-    state->control_center_btn = lv_btn_create(state->drawer_container);
-    lv_obj_set_size(state->control_center_btn, LV_PCT(90), 50);
-    lv_obj_align_to(state->control_center_btn, state->app_list, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
-    lv_obj_set_style_bg_color(state->control_center_btn, lv_color_hex(0x4CAF50), 0);
-    lv_obj_set_style_radius(state->control_center_btn, 8, 0);
-    
-    // 控制中心按钮标签
-    lv_obj_t* btn_label = lv_label_create(state->control_center_btn);
-    lv_label_set_text(btn_label, "控制中心");
-    lv_obj_set_style_text_color(btn_label, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_text_font(btn_label, &simhei_32, 0);
-    lv_obj_center(btn_label);
-    
-    // 添加按钮点击事件
-    lv_obj_add_event_cb(state->control_center_btn, control_center_btn_cb, LV_EVENT_CLICKED, state);
+    // 创建抽屉容器和基本UI
+    drawer_ui_create_container(state, app);
     
     // 创建控制面板
-    create_control_panel(state);
+    drawer_control_create_panel(state);
     
     // 保存状态到用户数据
     app->user_data = state;
@@ -480,7 +57,7 @@ static void drawer_overlay_destroy(app_t* app) {
             uint32_t child_count = lv_obj_get_child_count(state->app_list);
             for (uint32_t i = 0; i < child_count; i++) {
                 lv_obj_t* child = lv_obj_get_child(state->app_list, i);
-                cleanup_app_item(child);
+                drawer_ui_cleanup_app_item(child);
             }
         }
         
@@ -518,22 +95,18 @@ void app_drawer_open(void) {
                state->deep_cleaned ? "true" : "false");
         app_manager_log_memory_usage("Before app list creation");
         
-        refresh_app_list(state->app_list, true);
+        drawer_ui_refresh_app_list(state->app_list, true);
         state->is_initialized = true;
         state->deep_cleaned = false;
         
         app_manager_log_memory_usage("After app list creation");
     }
     
-    // 显示背景
-    //lv_obj_clear_flag(state->background, LV_OBJ_FLAG_HIDDEN);
-    
     // 确保抽屉容器可见
     lv_obj_clear_flag(state->drawer_container, LV_OBJ_FLAG_HIDDEN);
     
     // 强制刷新显示
     lv_obj_invalidate(state->drawer_container);
-    //lv_obj_invalidate(state->background);
     
     // 创建滑动动画
     lv_anim_init(&state->slide_anim);
@@ -542,7 +115,7 @@ void app_drawer_open(void) {
     lv_anim_set_time(&state->slide_anim, 300);
     lv_anim_set_exec_cb(&state->slide_anim, (lv_anim_exec_xcb_t)lv_obj_set_x);
     lv_anim_set_path_cb(&state->slide_anim, lv_anim_path_ease_out);
-    lv_anim_set_ready_cb(&state->slide_anim, slide_anim_ready_cb);
+    lv_anim_set_ready_cb(&state->slide_anim, drawer_events_slide_anim_ready_cb);
     lv_anim_set_user_data(&state->slide_anim, state);
     lv_anim_start(&state->slide_anim);
     
@@ -582,7 +155,7 @@ void app_drawer_close(void) {
     lv_anim_set_time(&state->slide_anim, 300);
     lv_anim_set_exec_cb(&state->slide_anim, (lv_anim_exec_xcb_t)lv_obj_set_x);
     lv_anim_set_path_cb(&state->slide_anim, lv_anim_path_ease_in);
-    lv_anim_set_ready_cb(&state->slide_anim, slide_anim_ready_cb);
+    lv_anim_set_ready_cb(&state->slide_anim, drawer_events_slide_anim_ready_cb);
     lv_anim_set_user_data(&state->slide_anim, state);
     lv_anim_start(&state->slide_anim);
     
@@ -612,266 +185,14 @@ void register_drawer_overlay(void) {
     app_manager_register_overlay("AppDrawer", LV_SYMBOL_LIST, 
                                  drawer_overlay_create, drawer_overlay_destroy,
                                  50, true);  // z_index=50, auto_start=true
-} 
-
-// 深度清理抽屉内存
-static void deep_clean_drawer(drawer_state_t* state) {
-    if (!state || state->is_open || state->deep_cleaned) {
-        return;
-    }
-    
-    printf("=== DEEP CLEANING DRAWER ===\n");
-    app_manager_log_memory_usage("Before drawer deep clean");
-    
-    // 安全清理应用列表
-    if (state->app_list && lv_obj_is_valid(state->app_list)) {
-        // 检查对象是否仍然有效
-        if (lv_obj_get_parent(state->app_list) != NULL) {
-            // 先停止所有可能的动画
-            lv_anim_del(state->app_list, NULL);
-            
-            // 安全获取子对象数量
-            uint32_t child_count = lv_obj_get_child_count(state->app_list);
-            
-            // 从后往前删除子对象，避免索引问题
-            for (int32_t i = (int32_t)child_count - 1; i >= 0; i--) {
-                lv_obj_t* child = lv_obj_get_child(state->app_list, i);
-                if (child && lv_obj_is_valid(child)) {
-                    cleanup_app_item(child);
-                    lv_obj_del(child);
-                }
-            }
-            
-            printf("Cleaned %lu app items from drawer\n", (unsigned long)child_count);
-        } else {
-            printf("App list parent is null, skipping cleanup\n");
-        }
-    } else {
-        printf("App list is invalid or null, skipping cleanup\n");
-    }
-    
-    // 重置初始化标志，下次打开时重新创建
-    state->is_initialized = false;
-    state->deep_cleaned = true;
-    
-    printf("App drawer deep cleaned\n");
-    app_manager_log_memory_usage("After drawer deep clean");
 }
 
-// 检查是否需要进行空闲清理
-static bool should_idle_cleanup(drawer_state_t* state) {
-    if (!state || state->is_open || state->deep_cleaned) {
-        return false;
-    }
-    
-    uint32_t current_time = esp_timer_get_time() / 1000;
-    return (current_time - state->last_open_time) > state->idle_cleanup_threshold;
-}
-
-// 强制清理应用列表以释放内存
+// 兼容性函数 - 重定向到内存管理模块
 void app_drawer_cleanup_list(void) {
-    overlay_t* overlay = app_manager_get_overlay("AppDrawer");
-    if (!overlay || !overlay->base.user_data) {
-        return;
-    }
-    
-    drawer_state_t* state = (drawer_state_t*)overlay->base.user_data;
-    if (state->is_open) {
-        // 抽屉打开时不清理
-        printf("Drawer is open, skipping cleanup\n");
-        return;
-    }
-    
-    // 检查是否有正在进行的动画
-    if (lv_anim_count_running()) {
-        printf("Animations running, skipping drawer cleanup\n");
-        return;
-    }
-    
-    // 确保抽屉已经关闭足够长时间
-    uint32_t current_time = esp_timer_get_time() / 1000;
-    if (state->last_open_time > 0 && (current_time - state->last_open_time) < 1000) {
-        printf("Drawer recently closed, skipping cleanup\n");
-        return;
-    }
-    
-    printf("Force cleaning app drawer list to free memory\n");
-    
-    // 执行深度清理
-    deep_clean_drawer(state);
-    
-    printf("App drawer list cleaned\n");
+    drawer_memory_cleanup_list();
 }
 
-// 智能内存管理 - 检查是否需要清理
 void app_drawer_check_cleanup(void) {
-    overlay_t* overlay = app_manager_get_overlay("AppDrawer");
-    if (!overlay || !overlay->base.user_data) {
-        return;
-    }
-    
-    drawer_state_t* state = (drawer_state_t*)overlay->base.user_data;
-    
-    // 检查是否需要空闲清理
-    if (should_idle_cleanup(state)) {
-        printf("Idle cleanup triggered for app drawer\n");
-        deep_clean_drawer(state);
-    }
-}
-
-
-// 控制面板关闭事件回调
-static void control_panel_close_cb(lv_event_t* e) {
-    drawer_state_t* state = (drawer_state_t*)lv_event_get_user_data(e);
-    if (state && state->control_panel) {
-        lv_obj_add_flag(state->control_panel, LV_OBJ_FLAG_HIDDEN);
-        state->panel_open = false;
-        printf("Control panel closed\n");
-    }
-}
-
-// 控制中心按钮点击事件
-static void control_center_btn_cb(lv_event_t* e) {
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_CLICKED) {
-        drawer_state_t* state = (drawer_state_t*)lv_event_get_user_data(e);
-        if (state) {
-            if (state->panel_open) {
-                // 关闭面板
-                lv_obj_add_flag(state->control_panel, LV_OBJ_FLAG_HIDDEN);
-                state->panel_open = false;
-                printf("Control panel closed\n");
-            } else {
-                // 打开面板
-                lv_obj_clear_flag(state->control_panel, LV_OBJ_FLAG_HIDDEN);
-                state->panel_open = true;
-                
-                // 更新滑块值
-                lv_slider_set_value(state->volume_slider, hal_get_speaker_volume(), LV_ANIM_OFF);
-                lv_slider_set_value(state->brightness_slider, hal_get_display_brightness(), LV_ANIM_OFF);
-                lv_label_set_text_fmt(state->volume_label, "音量: %d%%", hal_get_speaker_volume());
-                lv_label_set_text_fmt(state->brightness_label, "亮度: %d%%", hal_get_display_brightness());
-                
-                // 更新开关状态
-                bool speaker_enabled = hal_get_speaker_enable();
-                if (speaker_enabled) {
-                    lv_obj_add_state(state->speaker_switch, LV_STATE_CHECKED);
-                } else {
-                    lv_obj_clear_state(state->speaker_switch, LV_STATE_CHECKED);
-                }
-                
-                printf("Control panel opened\n");
-            }
-        }
-    }
-}
-
-// 创建控制面板
-// 创建控制面板
-static void create_control_panel(drawer_state_t* state) {
-    if (!state || !state->drawer_container) return;
-    
-    // 获取屏幕尺寸
-    lv_coord_t screen_width = lv_display_get_horizontal_resolution(NULL);
-    lv_coord_t screen_height = lv_display_get_vertical_resolution(NULL);
-    
-    // 创建控制面板（全屏覆盖）
-    state->control_panel = lv_obj_create(lv_screen_active());
-    lv_obj_set_size(state->control_panel, screen_width, screen_height);
-    lv_obj_set_pos(state->control_panel, 0, 0);
-    lv_obj_set_style_bg_color(state->control_panel, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(state->control_panel, LV_OPA_50, 0);  // 半透明背景
-    lv_obj_set_style_border_width(state->control_panel, 0, 0);
-    lv_obj_set_style_pad_all(state->control_panel, 0, 0);
-    lv_obj_add_flag(state->control_panel, LV_OBJ_FLAG_HIDDEN);  // 初始隐藏
-    lv_obj_clear_flag(state->control_panel, LV_OBJ_FLAG_SCROLLABLE);
-    
-    // 点击背景关闭面板
-    lv_obj_add_event_cb(state->control_panel, control_panel_close_cb, LV_EVENT_CLICKED, state);
-    
-    // 创建控制面板内容容器
-    lv_obj_t* panel_content = lv_obj_create(state->control_panel);
-    lv_obj_set_size(panel_content, 400, 300);
-    lv_obj_align(panel_content, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(panel_content, lv_color_hex(0xF5F5F5), 0);
-    lv_obj_set_style_bg_opa(panel_content, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(panel_content, 1, 0);
-    lv_obj_set_style_border_color(panel_content, lv_color_hex(0xE0E0E0), 0);
-    lv_obj_set_style_radius(panel_content, 12, 0);
-    lv_obj_set_style_pad_all(panel_content, 0, 0);  // 移除所有padding
-    lv_obj_clear_flag(panel_content, LV_OBJ_FLAG_SCROLLABLE);
-    
-    // 阻止事件冒泡到背景
-    lv_obj_clear_flag(panel_content, LV_OBJ_FLAG_EVENT_BUBBLE);
-    
-    // 面板标题
-    lv_obj_t* title = lv_label_create(panel_content);
-    lv_label_set_text(title, "控制中心");
-    lv_obj_set_style_text_color(title, lv_color_hex(0x333333), 0);
-    lv_obj_set_style_text_font(title, &simhei_32, 0);
-    lv_obj_set_pos(title, 20, 15);  // 直接设置标题位置
-    
-    // 音量标签
-    state->volume_label = lv_label_create(panel_content);
-    lv_label_set_text_fmt(state->volume_label, "音量: %d%%", hal_get_speaker_volume());
-    lv_obj_set_style_text_color(state->volume_label, lv_color_hex(0xFF6600), 0);
-    lv_obj_set_style_text_font(state->volume_label, &simhei_32, 0);
-    lv_obj_set_pos(state->volume_label, 20, 70);  // 直接设置位置
-    
-    // 音量滑块
-    state->volume_slider = lv_slider_create(panel_content);
-    lv_obj_set_size(state->volume_slider, 200, 18);
-    lv_obj_set_pos(state->volume_slider, 20, 105);  // 直接设置位置
-    lv_slider_set_range(state->volume_slider, 0, 100);
-    lv_slider_set_value(state->volume_slider, hal_get_speaker_volume(), LV_ANIM_OFF);
-    
-    // 设置音量滑块样式
-    lv_obj_set_style_bg_color(state->volume_slider, lv_color_hex(0xFF9966), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(state->volume_slider, lv_color_hex(0xFF6600), LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(state->volume_slider, lv_color_hex(0xFF4400), LV_PART_KNOB);
-    
-    lv_obj_add_event_cb(state->volume_slider, volume_slider_event_cb, LV_EVENT_VALUE_CHANGED, state);
-    
-    // 扬声器开关
-    state->speaker_switch = lv_switch_create(panel_content);
-    lv_obj_set_size(state->speaker_switch, 50, 25);
-    lv_obj_set_pos(state->speaker_switch, 230, 100);  // 直接设置位置，紧贴滑块右侧
-    
-    bool speaker_enabled = hal_get_speaker_enable();
-    if (speaker_enabled) {
-        lv_obj_add_state(state->speaker_switch, LV_STATE_CHECKED);
-    } else {
-        lv_obj_clear_state(state->speaker_switch, LV_STATE_CHECKED);
-    }
-    
-    lv_obj_set_style_bg_color(state->speaker_switch, lv_color_hex(0xCCCCCC), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(state->speaker_switch, lv_color_hex(0x00AA00), LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(state->speaker_switch, lv_color_hex(0xFFFFFF), LV_PART_KNOB);
-    
-    lv_obj_add_flag(state->speaker_switch, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(state->speaker_switch, speaker_switch_event_cb, LV_EVENT_VALUE_CHANGED, state);
-    lv_obj_add_event_cb(state->speaker_switch, speaker_switch_event_cb, LV_EVENT_CLICKED, state);
-    
-    // 亮度标签
-    state->brightness_label = lv_label_create(panel_content);
-    lv_label_set_text_fmt(state->brightness_label, "亮度: %d%%", hal_get_display_brightness());
-    lv_obj_set_style_text_color(state->brightness_label, lv_color_hex(0x0066FF), 0);
-    lv_obj_set_style_text_font(state->brightness_label, &simhei_32, 0);
-    lv_obj_set_pos(state->brightness_label, 20, 160);  // 直接设置位置
-    
-    // 亮度滑块
-    state->brightness_slider = lv_slider_create(panel_content);
-    lv_obj_set_size(state->brightness_slider, 280, 18);  // 固定宽度280像素
-    lv_obj_set_pos(state->brightness_slider, 20, 195);  // 直接设置位置
-    lv_slider_set_range(state->brightness_slider, 20, 100);
-    lv_slider_set_value(state->brightness_slider, hal_get_display_brightness(), LV_ANIM_OFF);
-    
-    lv_obj_set_style_bg_color(state->brightness_slider, lv_color_hex(0x6699FF), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(state->brightness_slider, lv_color_hex(0x0066FF), LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(state->brightness_slider, lv_color_hex(0x0044CC), LV_PART_KNOB);
-    
-    lv_obj_add_event_cb(state->brightness_slider, brightness_slider_event_cb, LV_EVENT_VALUE_CHANGED, state);
-    
-    state->panel_open = false;
+    drawer_memory_check_cleanup();
 }
 
