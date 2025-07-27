@@ -123,7 +123,7 @@ void create_ark_control_gui(lv_obj_t* parent)
     lv_obj_t * tabview;
     tabview = lv_tabview_create(parent);  // 使用传入的父容器而不是屏幕
     lv_tabview_set_tab_bar_position(tabview, LV_DIR_LEFT);
-    lv_tabview_set_tab_bar_size(tabview, 130);
+    lv_tabview_set_tab_bar_size(tabview, 160);
 
     // 确保tabview填满整个父容器
     lv_obj_set_size(tabview, LV_PCT(100), LV_PCT(100));
@@ -136,6 +136,8 @@ void create_ark_control_gui(lv_obj_t* parent)
     lv_obj_set_style_bg_color(tab_buttons, lv_palette_darken(LV_PALETTE_GREY, 3), 0);
     lv_obj_set_style_text_color(tab_buttons, lv_palette_lighten(LV_PALETTE_GREY, 5), 0);
     lv_obj_set_style_border_side(tab_buttons, LV_BORDER_SIDE_RIGHT, LV_PART_ITEMS | LV_STATE_CHECKED);
+    // 为标签按钮设置自定义字体
+    lv_obj_set_style_text_font(tab_buttons, &lv_font_montserrat_20, 0);
 
     /*Add 5 tabs (the tabs are page (lv_page) and can be scrolled*/
     lv_obj_t * tab1 = lv_tabview_add_tab(tabview, "Tab 1");
@@ -169,12 +171,12 @@ void create_ark_control_gui(lv_obj_t* parent)
     lv_obj_set_style_text_font(list, &simhei_32, LV_PART_MAIN);
     
     // 添加一些示例列表项
-    lv_obj_t *btn1 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "1");
-    lv_obj_t *btn2 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "2");
-    lv_obj_t *btn3 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "3");
-    lv_obj_t *btn4 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "4");
-    lv_obj_t *btn5 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "5");
-    lv_obj_t *btn6 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "6");
+    lv_obj_t *btn1 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "SPK1");
+    lv_obj_t *btn2 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "SPK2");
+    lv_obj_t *btn3 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "SPK3");
+    lv_obj_t *btn4 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "SPK4");
+    lv_obj_t *btn5 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "ITC1");
+    lv_obj_t *btn6 = lv_list_add_btn(list, LV_SYMBOL_VOLUME_MAX, "ITC2");
 
     // 为每个按钮的文本标签设置自定义字体
     lv_obj_t *label;
@@ -192,10 +194,10 @@ void create_ark_control_gui(lv_obj_t* parent)
     lv_obj_set_style_text_font(label, &simhei_32, 0);
     // 创建FAB按钮
     lv_obj_t * fab = lv_btn_create(tab2);
-    lv_obj_set_size(fab, 128, 128);
+    lv_obj_set_size(fab, 144, 144);
     lv_obj_add_flag(fab, LV_OBJ_FLAG_FLOATING);
     lv_obj_align(fab, LV_ALIGN_BOTTOM_RIGHT, -20, -20);
-    lv_obj_set_style_radius(fab, 64, LV_PART_MAIN);
+    lv_obj_set_style_radius(fab, 72, LV_PART_MAIN);
     
     // 为FAB添加图标
     lv_obj_t * fab_label = lv_label_create(fab);
