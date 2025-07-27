@@ -71,6 +71,7 @@ static void drawer_overlay_destroy(app_t* app) {
 }
 
 // 打开抽屉
+// 打开抽屉
 void app_drawer_open(void) {
     printf("Opening app drawer...\n");
     overlay_t* overlay = app_manager_get_overlay("AppDrawer");
@@ -108,11 +109,17 @@ void app_drawer_open(void) {
     // 强制刷新显示
     lv_obj_invalidate(state->drawer_container);
     
-    // 创建滑动动画
+    // Liquid Glass设计：计算动画位置（考虑缩小的padding）
+    lv_coord_t padding_left = 10;  // 更新为新的padding值
+    lv_coord_t drawer_width = lv_obj_get_width(state->drawer_container);
+    lv_coord_t start_pos = -drawer_width - padding_left;  // 起始位置（完全隐藏）
+    lv_coord_t end_pos = padding_left;  // 结束位置（显示时的左边距）
+    
+    // 创建滑动动画 - 适配Liquid Glass设计
     lv_anim_init(&state->slide_anim);
     lv_anim_set_var(&state->slide_anim, state->drawer_container);
-    lv_anim_set_values(&state->slide_anim, -lv_obj_get_width(state->drawer_container), 0);
-    lv_anim_set_time(&state->slide_anim, 300);
+    lv_anim_set_values(&state->slide_anim, start_pos, end_pos);
+    lv_anim_set_time(&state->slide_anim, 400);  // 稍微增加动画时间，更优雅
     lv_anim_set_exec_cb(&state->slide_anim, (lv_anim_exec_xcb_t)lv_obj_set_x);
     lv_anim_set_path_cb(&state->slide_anim, lv_anim_path_ease_out);
     lv_anim_set_ready_cb(&state->slide_anim, drawer_events_slide_anim_ready_cb);
@@ -148,11 +155,17 @@ void app_drawer_close(void) {
         return;
     }
     
-    // 创建滑动动画
+    // Liquid Glass设计：计算动画位置（考虑缩小的padding）
+    lv_coord_t padding_left = 10;  // 更新为新的padding值
+    lv_coord_t drawer_width = lv_obj_get_width(state->drawer_container);
+    lv_coord_t start_pos = padding_left;  // 起始位置（当前显示位置）
+    lv_coord_t end_pos = -drawer_width - padding_left;  // 结束位置（完全隐藏）
+    
+    // 创建滑动动画 - 适配Liquid Glass设计
     lv_anim_init(&state->slide_anim);
     lv_anim_set_var(&state->slide_anim, state->drawer_container);
-    lv_anim_set_values(&state->slide_anim, 0, -lv_obj_get_width(state->drawer_container));
-    lv_anim_set_time(&state->slide_anim, 300);
+    lv_anim_set_values(&state->slide_anim, start_pos, end_pos);
+    lv_anim_set_time(&state->slide_anim, 350);  // 关闭动画稍快一些
     lv_anim_set_exec_cb(&state->slide_anim, (lv_anim_exec_xcb_t)lv_obj_set_x);
     lv_anim_set_path_cb(&state->slide_anim, lv_anim_path_ease_in);
     lv_anim_set_ready_cb(&state->slide_anim, drawer_events_slide_anim_ready_cb);

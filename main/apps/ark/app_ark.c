@@ -8,9 +8,12 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "utils/memory_utils.h"
+#include "assets/picture5.c"
 
 // 声明自定义字体
 LV_FONT_DECLARE(simhei_32);
+// 声明图片
+LV_IMAGE_DECLARE(picture5);
 
 // Ark应用状态结构
 typedef struct {
@@ -206,8 +209,8 @@ void create_ark_control_gui(lv_obj_t* parent)
     lv_obj_center(fab_label);
 
     // -=-=-=-=-=-=-=-=-=[Tab3]=-=-=-=-=-=-=-=-=-=-
-    lv_obj_t * label2 = lv_label_create(tab3);
-    lv_label_set_text(label2, "Third tab");
+    lv_obj_t * bgimg = lv_image_create(tab3);
+    lv_image_set_src(bgimg, &picture5);
     // -=-=-=-=-=-=-=-=-=[Tab4]=-=-=-=-=-=-=-=-=-=-
     lv_obj_t * label3 = lv_label_create(tab4);
     lv_label_set_text(label3, "Forth tab");

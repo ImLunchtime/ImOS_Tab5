@@ -3,13 +3,12 @@
 #include "overlay_drawer.h"
 #include <stdio.h>
 //#include "assets/bg.c"
+#include "assets/creeperwoods.c"
 
 // 声明自定义字体
 LV_FONT_DECLARE(simhei_32);
 
-// 外部声明背景图片 - 来自assets/bg.c
-//extern const lv_image_dsc_t bg;
-//LV_FONT_DECLARE(simhei_32);
+LV_IMAGE_DECLARE(creeperwoods);
 
 // 启动器应用创建
 static void launcher_app_create(app_t* app) {
@@ -20,17 +19,13 @@ static void launcher_app_create(app_t* app) {
     // // 设置透明背景，让背景图片显示出来
     // lv_obj_set_style_bg_opa(app->container, LV_OPA_TRANSP, 0);
     
-    // // 创建背景图片对象
-    // lv_obj_t* bg_img = lv_image_create(app->container);
-    // lv_image_set_src(bg_img, &bg);
+    // 创建背景图片对象
+    lv_obj_t* bg_img = lv_image_create(app->container);
+    lv_image_set_src(bg_img, &creeperwoods);
     
-    // // 将图片放大到两倍大小并居中 - 使用正确的缩放API
-    // lv_image_set_scale(bg_img, 512);  // 512 = 2.0x scale (256 is 1.0x)
-    // lv_obj_align(bg_img, LV_ALIGN_CENTER, 0, 0);
-    
-    // // 确保图片不会拦截事件，让手势处理器能正常工作
-    // lv_obj_add_flag(bg_img, LV_OBJ_FLAG_EVENT_BUBBLE);
-    // lv_obj_clear_flag(bg_img, LV_OBJ_FLAG_CLICKABLE);
+    // 确保图片不会拦截事件，让手势处理器能正常工作
+    lv_obj_add_flag(bg_img, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_clear_flag(bg_img, LV_OBJ_FLAG_CLICKABLE);
 
     // 创建欢迎文本标签
     lv_obj_t* welcome_label = lv_label_create(app->container);
