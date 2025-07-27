@@ -16,6 +16,7 @@ LV_FONT_DECLARE(simhei_32);
 // 声明图片资源
 extern const lv_img_dsc_t image1;
 extern const lv_img_dsc_t scenery1;
+extern const lv_img_dsc_t picture5;
 
 // 照片项结构
 typedef struct {
@@ -48,7 +49,8 @@ static photo_app_state_t* g_photo_state = NULL;
 // 照片数据 - 添加/删除图片修改此处
 static photo_item_t photo_items[] = {
     {"照片1", &image1, false, false},  // image1可以被隐藏
-    {"照片2", &scenery1, false, false},
+    {"照片2", &picture5, false, false},
+    {"照片3", &scenery1, false, false},
 };
 
 // 前向声明
@@ -66,6 +68,9 @@ static uint32_t get_visible_photo_count(void) {
     for (uint32_t i = 0; i < sizeof(photo_items) / sizeof(photo_items[0]); i++) {
         // image1只有在解锁状态下才可见
         if (photo_items[i].img == &image1 && !unlocked) {
+            continue;
+        }
+        if (photo_items[i].img == &picture5 && !unlocked) {
             continue;
         }
         count++;

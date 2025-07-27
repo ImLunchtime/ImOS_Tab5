@@ -1,3 +1,4 @@
+file(GLOB_RECURSE ASSETS "assets/*.c")
 idf_component_register(SRCS 
                             "apps/photo/app_photo_images.c" 
                             "apps/photo/app_photo.c"
@@ -24,8 +25,5 @@ idf_component_register(SRCS
                             "apps/file_manager/app_file_manager.c"
                             "managers/nvs_manager.c"
                             "managers/content_lock.c"
-                            "assets/bg.c"
-                            "assets/image1.c"
-                            "assets/scenery1.c"
-                            "assets/simhei_32.c"
+                            ${ASSETS}
                        INCLUDE_DIRS ".")
