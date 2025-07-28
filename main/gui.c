@@ -4,7 +4,6 @@
 #include "apps/launcher/app_launcher.h"
 #include "apps/settings/app_settings.h"
 #include "apps/music_player/app_music_player.h"
-#include "apps/file_manager/app_file_manager.c"
 #include "apps/pwm_servo/app_pwm_servo.c"
 #include "apps/photo/app_photo.c"  // 添加照片应用头文件
 #include "apps/ark/app_ark.c"    // 添加Ark应用头文件
@@ -26,7 +25,6 @@ void gui_init(lv_disp_t *disp)
     register_launcher_app();
     register_settings_app();
     register_music_player_app();
-    register_file_manager_app();
     register_pwm_servo_app();
     register_photo_app();
     register_ark_app();             // 注册Ark应用

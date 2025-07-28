@@ -26,7 +26,6 @@ idf_component_register(SRCS
                             "hal/hal_display.c"
                             "hal/hal_sdcard.c"
                             "apps/music_player/app_music_player.c"
-                            "apps/file_manager/app_file_manager.c"
                             "managers/nvs_manager.c"
                             "managers/content_lock.c"
                             ${ASSETS}
